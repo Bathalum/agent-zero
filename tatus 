@@ -1,0 +1,306 @@
+[33mcommit 80044492dfccab92ef399ec1a328900722ab3df8[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Bathalum <agcryptogaming@gmail.com>
+Date:   Fri Aug 9 12:32:52 2024 +0800
+
+    removed 'example' to make a proper .env file
+
+[33mcommit 35267ecf950bc49ea56f610b694c18e41d049dff[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sun Aug 4 19:06:34 2024 +0200
+
+    New models, hints, bugfixes, prompt adjustments
+
+[33mcommit b6e32160c44a49a9420a07e41ec48e4ab8aff6d5[m
+Merge: 9b1af03 1d311b7
+Author: Jan Tomášek <38891707+frdel@users.noreply.github.com>
+Date:   Sun Aug 4 14:25:56 2024 +0200
+
+    Merge pull request #35 from gauravdhiman/gitignore-change
+    
+    Just adding virtual env folder to .gitignore
+
+[33mcommit 9b1af033128658b7ccb0cd7f5d45b4c4996b0426[m
+Merge: 890ee70 cb60dd4
+Author: Jan Tomášek <38891707+frdel@users.noreply.github.com>
+Date:   Sun Aug 4 12:33:03 2024 +0200
+
+    Merge pull request #38 from gauravdhiman/openrouter-support
+    
+    Added support to use OpenRouter models
+
+[33mcommit cb60dd4fbd3c25ea3c1aedcd91259884a77cf076[m
+Author: Gaurav Dhiman <gauravd.chd@gmail.com>
+Date:   Sat Aug 3 23:30:27 2024 -0700
+
+    Added support to use openrouter models
+
+[33mcommit 1d311b789058a425157e38c1cc30e9a599d911e5[m
+Author: Gaurav Dhiman <gauravd.chd@gmail.com>
+Date:   Sat Aug 3 17:10:49 2024 -0700
+
+    Just adding virtual env folder to .gitignore
+
+[33mcommit 890ee705c941d04d32eb784e4352ce32024032c6[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sat Jul 27 20:17:19 2024 +0200
+
+    Update README.md
+
+[33mcommit 9e82401244f8205736e7c9523bb923eeaed45e6b[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 26 11:30:15 2024 +0200
+
+    licence and readme
+
+[33mcommit 7fd1d115396cfd1919328bc8d41f3bf10eb0d9e3[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 26 10:51:35 2024 +0200
+
+    readme update, v0.4
+    
+    seems stable
+
+[33mcommit 5c592ca71ff9ffcf00ffc19bc6e886297b2f1a4d[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Thu Jul 25 23:47:32 2024 +0200
+
+    intervention fix, timed output fix?, dirty json {{ fix, prompt additions
+
+[33mcommit cc19171464b0561a37c28160edbff96651e41556[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Thu Jul 25 20:59:25 2024 +0200
+
+    docker wait update
+
+[33mcommit 76fe115aeb6ad73f565a427773ae9af3d48d471c[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Thu Jul 25 20:57:14 2024 +0200
+
+    readme update, docker update, small changes
+
+[33mcommit a3ad9655454d0d8b1a9923db6579f92c62771d06[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jul 22 14:02:04 2024 +0200
+
+    perplexity model, shell decode
+
+[33mcommit 4eed7feae7539793310a23fd02f950c43fb2f8b8[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jul 22 12:55:52 2024 +0200
+
+    discord link
+
+[33mcommit 50464c50a8e8c37d7f5307d19d653ba5483d65f5[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 19 22:47:16 2024 +0200
+
+    gpt-4o-mini
+
+[33mcommit 9f338a823e5d2684764d88b9cdafad756d49c3a7[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sun Jul 14 23:48:10 2024 +0200
+
+    duckduckgo search prototype
+
+[33mcommit aebd266154c0f19bde1cb2a45e9a3e1f3f6c4fba[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sun Jul 14 22:14:43 2024 +0200
+
+    version fix
+
+[33mcommit 65bc8348108ca5e2864a484e9baa52b3471ce27b[m
+Merge: 453b91a 947aa9b
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sun Jul 14 10:51:24 2024 +0200
+
+    Merge branch 'development' into testing
+
+[33mcommit 947aa9bbffd69e3c4ef4b41a889ff43f4e408ebc[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sun Jul 14 10:49:50 2024 +0200
+
+    memory fix
+
+[33mcommit 453b91a8d82f3b40f1f6ee5029ab5866d1930064[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 12 11:04:32 2024 +0200
+
+    timed output bug fix
+
+[33mcommit d2374bfe699aad59f82a57c5106ed1be8f86a7bf[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 12 10:44:32 2024 +0200
+
+    windows timed input fix
+
+[33mcommit b3adcc7bca8eaff90093a9c6d631e656ddf2b80a[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 12 10:19:21 2024 +0200
+
+    memory tool update, minor cleanup, utility models
+
+[33mcommit 76ff3c5fcf1e28bc2ffb9555a6a79ba74f880bef[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jul 8 13:59:20 2024 +0200
+
+    google gemini support, docker startup fix, console input fix
+
+[33mcommit ef22702eff5ba6705b1e31b6ba9cd76a0d13506c[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jul 8 08:37:02 2024 +0200
+
+    docker files, agent number fix, json misformat message
+
+[33mcommit 281061f351f06ecdd47da04c6185cfad4d79700d[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Sun Jul 7 14:28:58 2024 +0200
+
+    SSH output cleanup, delegation fix
+
+[33mcommit b74d05d6c2bf278537bd1388f399d4075fcdf5a6[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jul 5 22:58:16 2024 +0200
+
+    Docker + SSH, AgentConfig class
+
+[33mcommit be11dbbab621a6c3a80096dfc48d594f143fd9eb[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Wed Jun 26 22:33:13 2024 +0200
+
+    prototype v0.2
+    
+    free JSON format, dirty parsing, tool superclass, memory injection, new rate limiter, agent params
+
+[33mcommit 422d5ca983785c56dc0d07caae5c34e9fd6258ab[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 24 23:18:53 2024 +0200
+
+    memory injection with filter, mid messages summary
+
+[33mcommit 2330288798952bb78cad0b9c6a0d242abb62b088[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Fri Jun 21 09:06:33 2024 +0200
+
+    JSON message format prorotype
+
+[33mcommit fa208ba3be27d2a4239f39043ab6666173ab17c8[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Thu Jun 20 21:39:23 2024 +0200
+
+    multi-tool xml parser + tool superclass
+
+[33mcommit 643d6cb759e15b4481c8f9036069e519bd73de74[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Thu Jun 13 08:40:15 2024 +0200
+
+    messages, knowledge tool merge
+
+[33mcommit 3f755277c4c68af5feea2895e24fe21f426cce6d[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Wed Jun 12 18:22:24 2024 +0200
+
+    user input timeouts, tools consolidation
+
+[33mcommit 032f1f590bce2e4f81b25a60f81179bee10c6a63[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Wed Jun 12 00:40:12 2024 +0200
+
+    new message standards testing
+    
+    gpt-4o successfully created a paint app for the first time
+
+[33mcommit 0bdb78f5a6b1edab3bc9269369f92805e5f08219[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Tue Jun 11 17:44:50 2024 +0200
+
+    local embeddings model, requirements cleanup
+
+[33mcommit c7abcabced7d292a777607e12036748cd6ec4cdf[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Tue Jun 11 17:00:24 2024 +0200
+
+    logs, prompt, readme
+
+[33mcommit e9581679a3189c11b7d1a409696ee3e3726a6265[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Tue Jun 11 15:37:15 2024 +0200
+
+    prompt update, tool limitation, code robustness
+
+[33mcommit 35dd115d0297422af6bbe65a69d32b0597d705c0[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Tue Jun 11 00:48:34 2024 +0200
+
+    readme update
+
+[33mcommit f74a60359b659dd88ed39c5978c89baba3f985a5[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Tue Jun 11 00:35:01 2024 +0200
+
+    nodejs and python using terminal, confirmation dialogs
+
+[33mcommit c3b6172538ea3c23c9111b6b65f7c4455ca0ca1e[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 23:08:32 2024 +0200
+
+    terminal and nodejs
+
+[33mcommit 2e53066c7d2c60919c464c5acf52e683abdaaef7[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 16:22:52 2024 +0200
+
+    Delete tools/helpers/__pycache__ directory
+
+[33mcommit c3297562d2c9500a3ba26966a7b898c86073d3da[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 16:22:38 2024 +0200
+
+    Delete tools/.DS_Store
+
+[33mcommit 8d8eec672cf838efe1167e70d4f1fd2de972bf03[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 16:21:47 2024 +0200
+
+    Delete tools/__pycache__ directory
+
+[33mcommit 1cfed034b3c20498c3b3669ec1905cdb7527f2fa[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 16:21:04 2024 +0200
+
+    gitkeeps
+
+[33mcommit b9e1120a8e8f8812e19dfe41e3c79af40e222e65[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 16:16:54 2024 +0200
+
+    windows slowdown and compatibility fix
+
+[33mcommit 32aa164b72c036bbf7bffe994e1b49cce727e231[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 15:51:10 2024 +0200
+
+    readme
+
+[33mcommit 4f82294cd5b8c5f9b24971d53b8d7a7dc02b3c54[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 15:46:54 2024 +0200
+
+    readme
+
+[33mcommit 637903e6a84d7e9cd2a345db69f8b11b07c9db62[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 14:07:35 2024 +0200
+
+    requirements and ignores
+
+[33mcommit 8cef5e1e359f057e197a9a6d52278ce9773dba55[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 11:10:31 2024 +0200
+
+    first load
+
+[33mcommit ba9d45c902ece4340cc762806da56ffa1a49c549[m
+Author: frdel <38891707+frdel@users.noreply.github.com>
+Date:   Mon Jun 10 10:33:27 2024 +0200
+
+    Initial commit
