@@ -1,0 +1,22 @@
+{
+  "n8n_base_url": "https://silveraiautomation.app.n8n.cloud",
+  "workflows": {
+    "email_workflow": {
+      "webhook_path": "/webhook/your-webhook-id",
+      "description": "Send automated emails",
+      "parameters": [
+        "recipient",
+        "template",
+        "data"
+      ]
+    },
+    "slack_message": {
+      "webhook_path": "/webhook/2cbfd243-09ea-4f58-96e4-e66f82b8ef45",
+      "description": "Send Slack Message to a specific channel",
+      "parameters": [
+        "Message"
+      ]
+    }
+  }
+}
+

@@ -6,7 +6,7 @@ const toast = globalThis.toast;
 const fetchApi = globalThis.fetchApi;
 
 // ⚠️ CRITICAL: The .env file contains API keys and essential configuration.
-// This file is REQUIRED for Agent Zero to function and must be backed up.
+// This file is REQUIRED for Argent to function and must be backed up.
 
 const model = {
   // State
@@ -143,7 +143,7 @@ const model = {
     };
   },
 
-  // Editor Management - Following Agent Zero ACE editor patterns
+  // Editor Management - Following Argent ACE editor patterns
   async initBackupEditor() {
     const container = document.getElementById("backup-metadata-editor");
     if (container) {

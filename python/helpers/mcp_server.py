@@ -3,7 +3,6 @@ from typing import Annotated, Literal, Union
 from urllib.parse import urlparse
 from openai import BaseModel
 from pydantic import Field
-from fastmcp import FastMCP
 
 from agent import AgentContext, AgentContextType, UserMessage
 from python.helpers.persist_chat import remove_chat
@@ -14,22 +13,42 @@ from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
-from fastmcp.server.http import create_sse_app
 from starlette.requests import Request
 import threading
 
 _PRINTER = PrintStyle(italic=True, font_color="green", padding=False)
 
+# Try to import fastmcp, but handle gracefully if it fails
+mcp_server = None
+create_sse_app = None
+FASTMCP_AVAILABLE = False
 
-mcp_server: FastMCP = FastMCP(
-    name="Agent Zero integrated MCP Server",
-    instructions="""
-    Connect to remote Agent Zero instance.
-    Agent Zero is a general AI assistant controlling it's linux environment.
-    Agent Zero can install software, manage files, execute commands, code, use internet, etc.
-    Agent Zero's environment is isolated unless configured otherwise.
-    """,
-)
+try:
+    from fastmcp import FastMCP
+    from fastmcp.server.http import create_sse_app
+    
+    mcp_server = FastMCP(
+        name="Agent Zero integrated MCP Server",
+        instructions="""
+        Connect to remote Agent Zero instance.
+        Agent Zero is a general AI assistant controlling it's linux environment.
+        Agent Zero can install software, manage files, execute commands, code, use internet, etc.
+        Agent Zero's environment is isolated unless configured otherwise.
+        """,
+    )
+    FASTMCP_AVAILABLE = True
+except Exception as e:
+    PrintStyle(font_color="yellow", padding=True).print(f"Warning: FastMCP not available: {str(e)[:100]}")
+    PrintStyle(font_color="yellow").print("MCP server functionality will be disabled. This is normal if not using MCP.")
+    
+    # Create a dummy decorator that does nothing
+    class DummyMCP:
+        def tool(self, *args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+    
+    mcp_server = DummyMCP()
 
 
 class ToolResponse(BaseModel):
@@ -291,6 +310,11 @@ class DynamicMcpProxy:
         if self.token == token:
             return
 
+        # If FastMCP is not available, skip configuration
+        if not FASTMCP_AVAILABLE:
+            self.token = token
+            return
+
         self.token = token
         sse_path = f"/t-{self.token}/sse"
         http_path = f"/t-{self.token}/http"
@@ -325,6 +349,9 @@ class DynamicMcpProxy:
 
     def _create_custom_http_app(self, streamable_http_path, auth_server_provider, auth_settings, debug, routes):
         """Create a custom HTTP app that manages the session manager manually."""
+        if not FASTMCP_AVAILABLE:
+            return None
+            
         from fastmcp.server.http import setup_auth_middleware_and_routes, create_base_app
         from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
         from starlette.routing import Mount
@@ -396,8 +423,22 @@ class DynamicMcpProxy:
             debug=debug,
         )
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+    async def __call__(self, scope: Scope, receive: Scope, send: Send) -> None:
         """Forward the ASGI calls to the appropriate app based on the URL path"""
+        # If FastMCP is not available, return 503
+        if not FASTMCP_AVAILABLE:
+            response = {
+                'type': 'http.response.start',
+                'status': 503,
+                'headers': [(b'content-type', b'text/plain')],
+            }
+            await send(response)
+            await send({
+                'type': 'http.response.body',
+                'body': b'MCP server is not available - FastMCP dependency error',
+            })
+            return
+            
         with self._lock:
             sse_app = self.sse_app
             http_app = self.http_app
