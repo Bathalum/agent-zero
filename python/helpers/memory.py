@@ -315,6 +315,37 @@ class Memory:
             filename_pattern="**/*.md",
         )
 
+        # Enrich instrument documents with metadata from registry
+        try:
+            from python.helpers.instrument_metadata import InstrumentMetadata
+            metadata_registry = InstrumentMetadata.load_registry()
+            
+            # For each loaded instrument document, enhance metadata
+            for doc_id, doc_data in index.items():
+                if doc_data.get("metadata", {}).get("area") == Memory.Area.INSTRUMENTS.value:
+                    # Extract instrument name from path
+                    source_path = doc_data.get("source_path", "")
+                    instrument_id = InstrumentMetadata.extract_instrument_id_from_path(source_path)
+                    
+                    # Get metadata from registry
+                    if instrument_id and instrument_id in metadata_registry.get("instruments", {}):
+                        registry_data = metadata_registry["instruments"][instrument_id]
+                        
+                        # Merge into document metadata
+                        if "metadata" not in doc_data:
+                            doc_data["metadata"] = {}
+                        
+                        doc_data["metadata"].update({
+                            "instrument_id": instrument_id,
+                            "profiles": registry_data.get("profiles", ["default"]),
+                            "tags": registry_data.get("tags", []),
+                            "priority": registry_data.get("priority", 5),
+                            "enabled": registry_data.get("enabled", True),
+                        })
+        except Exception as e:
+            # Don't break memory loading if metadata enrichment fails
+            print(f"Warning: Could not enrich instruments with metadata: {e}")
+
         return index
 
     def get_document_by_id(self, id: str) -> Document | None:

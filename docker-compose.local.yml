@@ -13,19 +13,35 @@ services:
     
     # Port mappings
     ports:
-      - "${WEB_PORT:-50080}:80"      # Web UI
-      - "${SSH_PORT:-55022}:22"       # SSH for development
+      - "${WEB_PORT:-8080}:80"      # Web UI
+      - "${SSH_PORT:-2222}:22"       # SSH for development
     
     # Volume mappings for persistence
     # WARNING: Mapping full /a0 can cause upgrade issues
     # Consider using backup/restore instead
     volumes:
-      # Recommended: Map only specific directories
+      # Data directories (persisted)
       - ./agent-zero-data/memory:/a0/memory
       - ./agent-zero-data/knowledge:/a0/knowledge
       - ./agent-zero-data/instruments:/a0/instruments
       - ./agent-zero-data/logs:/a0/logs
       - ./agent-zero-data/tmp:/a0/tmp
+      
+      # DEVELOPMENT MODE: Source code hot-reload
+      # Map local source code to container for instant updates
+      - ./python:/a0/python
+      - ./agents:/a0/agents
+      - ./prompts:/a0/prompts
+      - ./webui:/a0/webui
+      - ./run_ui.py:/a0/run_ui.py
+      - ./run_tunnel.py:/a0/run_tunnel.py
+      - ./agent.py:/a0/agent.py
+      - ./models.py:/a0/models.py
+      - ./initialize.py:/a0/initialize.py
+      - ./preload.py:/a0/preload.py
+      - ./prepare.py:/a0/prepare.py
+      - ./lib:/a0/lib
+      
       # Optional: Map .env file for API keys persistence
       # - ./agent-zero-data/.env:/a0/.env
     

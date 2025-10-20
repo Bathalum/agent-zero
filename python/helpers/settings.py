@@ -75,6 +75,12 @@ class Settings(TypedDict):
     memory_memorize_consolidation: bool
     memory_memorize_replace_threshold: float
 
+    instrument_recall_enabled: bool
+    instrument_recall_interval: int
+    instrument_recall_max_search: int
+    instrument_recall_max_result: int
+    instrument_recall_similarity_threshold: float
+
     api_keys: dict[str, str]
 
     auth_login: str
@@ -843,6 +849,89 @@ def convert_out(settings: Settings) -> SettingsOutput:
         "tab": "agent",
     }
 
+    # Instruments recall section
+    instruments_fields: list[SettingsField] = []
+
+    instruments_fields.append(
+        {
+            "id": "instrument_recall_enabled",
+            "title": "Enable instrument recall",
+            "description": "Automatically recall relevant instruments based on profile and task context",
+            "type": "switch",
+            "value": settings["instrument_recall_enabled"],
+        }
+    )
+
+    instruments_fields.append(
+        {
+            "id": "instrument_recall_interval",
+            "title": "Instrument recall interval",
+            "description": "Recall instruments every N iterations",
+            "type": "number",
+            "value": settings["instrument_recall_interval"],
+            "min": 1,
+            "max": 20,
+            "step": 1,
+        }
+    )
+
+    instruments_fields.append(
+        {
+            "id": "instrument_recall_max_search",
+            "title": "Max instruments to search",
+            "description": "Maximum number of instruments to search in memory",
+            "type": "number",
+            "value": settings["instrument_recall_max_search"],
+            "min": 1,
+            "max": 20,
+            "step": 1,
+        }
+    )
+
+    instruments_fields.append(
+        {
+            "id": "instrument_recall_max_result",
+            "title": "Max instruments to show",
+            "description": "Maximum number of instruments to inject into prompt",
+            "type": "number",
+            "value": settings["instrument_recall_max_result"],
+            "min": 1,
+            "max": 10,
+            "step": 1,
+        }
+    )
+
+    instruments_fields.append(
+        {
+            "id": "instrument_recall_similarity_threshold",
+            "title": "Instrument similarity threshold",
+            "description": "Minimum similarity score (0.0-1.0) for instrument recall",
+            "type": "range",
+            "value": settings["instrument_recall_similarity_threshold"],
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.05,
+        }
+    )
+
+    instruments_fields.append(
+        {
+            "id": "manage_instruments",
+            "title": "Manage Instruments",
+            "description": "View and configure instrument assignments",
+            "type": "button",
+            "value": "Manage Instruments",
+        }
+    )
+
+    instruments_section: SettingsSection = {
+        "id": "instruments",
+        "title": "Instruments",
+        "description": "Configuration of instrument recall system. Instruments are additional tools that can be dynamically loaded based on task context.",
+        "fields": instruments_fields,
+        "tab": "agent",
+    }
+
     dev_fields: list[SettingsField] = []
 
     dev_fields.append(
@@ -1260,6 +1349,7 @@ def convert_out(settings: Settings) -> SettingsOutput:
             browser_model_section,
             embed_model_section,
             memory_section,
+            instruments_section,
             speech_section,
             api_keys_section,
             litellm_section,
@@ -1475,6 +1565,11 @@ def get_default_settings() -> Settings:
         memory_memorize_enabled=True,
         memory_memorize_consolidation=True,
         memory_memorize_replace_threshold=0.9,
+        instrument_recall_enabled=False,
+        instrument_recall_interval=5,
+        instrument_recall_max_search=8,
+        instrument_recall_max_result=3,
+        instrument_recall_similarity_threshold=0.4,
         api_keys={},
         auth_login="",
         auth_password="",

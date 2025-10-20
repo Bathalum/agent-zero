@@ -22,8 +22,8 @@ if (Test-Path $envFile) {
 }
 
 # Set defaults if not in environment
-if (-not $env:WEB_PORT) { $env:WEB_PORT = "50080" }
-if (-not $env:SSH_PORT) { $env:SSH_PORT = "55022" }
+if (-not $env:WEB_PORT) { $env:WEB_PORT = "8080" }
+if (-not $env:SSH_PORT) { $env:SSH_PORT = "2222" }
 if (-not $env:CACHE_DATE) { $env:CACHE_DATE = (Get-Date -Format "yyyy-MM-dd") }
 
 Write-Host "Web UI Port: $env:WEB_PORT" -ForegroundColor Gray

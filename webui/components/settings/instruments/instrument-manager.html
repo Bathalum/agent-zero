@@ -1,0 +1,189 @@
+<html>
+
+<head>
+    <title>Instrument Manager</title>
+    <script type="module">
+        import { store } from "/components/settings/instruments/instrument-manager-store.js";
+    </script>
+</head>
+
+<body>
+<div x-data>
+    <template x-if="$store.instrumentManagerStore">
+        <div x-init="$store.instrumentManagerStore.initialize()" x-destroy="$store.instrumentManagerStore.onClose()" class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+    
+    <div class="modal-header" style="padding: 20px; border-bottom: 1px solid #333;">
+        <h2 style="margin: 0; font-size: 24px;">Instrument Manager</h2>
+        <p style="margin: 10px 0 0 0; color: #888;">
+            Manage registered instruments and their profile assignments
+        </p>
+    </div>
+
+    <div class="modal-body" style="padding: 20px;">
+        
+        <!-- Filters -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #888;">
+                    Filter by Profile:
+                </label>
+                <select 
+                    x-model="$store.instrumentManagerStore.filterProfile" 
+                    @change="$store.instrumentManagerStore.loadInstruments()"
+                    style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 4px;">
+                    <option value="">All Profiles</option>
+                    <option value="default">Default</option>
+                    <option value="agent0">Agent0</option>
+                    <option value="researcher">Researcher</option>
+                    <option value="developer">Developer</option>
+                </select>
+            </div>
+            
+            <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #888;">
+                    Filter by Type:
+                </label>
+                <select 
+                    x-model="$store.instrumentManagerStore.filterType" 
+                    @change="$store.instrumentManagerStore.loadInstruments()"
+                    style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 4px;">
+                    <option value="">All Types</option>
+                    <option value="n8n">N8N Workflows</option>
+                </select>
+            </div>
+
+            <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #888;">
+                    Filter by Status:
+                </label>
+                <select 
+                    x-model="$store.instrumentManagerStore.filterEnabled" 
+                    @change="$store.instrumentManagerStore.loadInstruments()"
+                    style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 4px;">
+                    <option value="">All</option>
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="$store.instrumentManagerStore.loading" style="text-align: center; padding: 40px; color: #888;">
+            <div style="font-size: 18px;">Loading instruments...</div>
+        </div>
+
+        <!-- Error State -->
+        <div x-show="$store.instrumentManagerStore.error" style="padding: 15px; background: #2a1a1a; border: 1px solid #aa0000; border-radius: 4px; color: #ff6666; margin-bottom: 20px;">
+            <strong>Error:</strong> <span x-text="$store.instrumentManagerStore.error"></span>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!$store.instrumentManagerStore.loading && $store.instrumentManagerStore.instruments.length === 0 && !$store.instrumentManagerStore.error" 
+             style="text-align: center; padding: 40px; color: #888; background: #1a1a1a; border-radius: 8px; border: 2px dashed #333;">
+            <div style="font-size: 48px; margin-bottom: 10px;">📦</div>
+            <div style="font-size: 18px; margin-bottom: 10px;">No instruments found</div>
+            <div style="font-size: 14px;">
+                Register your first instrument using the n8n integration or API
+            </div>
+        </div>
+
+        <!-- Instruments List -->
+        <div x-show="!$store.instrumentManagerStore.loading && $store.instrumentManagerStore.instruments.length > 0" class="instruments-list">
+            <template x-for="instrument in $store.instrumentManagerStore.instruments" :key="instrument.id">
+                <div class="instrument-card" 
+                     style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 15px;">
+                    
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 5px 0; font-size: 18px; color: white;" x-text="instrument.display_name || instrument.id"></h3>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <span style="font-size: 12px; padding: 3px 8px; background: #2a2a2a; border-radius: 3px; color: #888;" x-text="instrument.type"></span>
+                                <span style="font-size: 12px; color: #666;">ID: <span x-text="instrument.id"></span></span>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <!-- Enabled Toggle -->
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <span style="font-size: 12px; color: #888;">Enabled</span>
+                                <input 
+                                    type="checkbox" 
+                                    :checked="instrument.enabled"
+                                    @change="$store.instrumentManagerStore.toggleEnabled(instrument)"
+                                    style="cursor: pointer;">
+                            </label>
+                            
+                            <!-- Edit Button -->
+                            <button 
+                                @click="$store.instrumentManagerStore.editInstrument(instrument)"
+                                style="padding: 6px 12px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                Edit
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <p style="margin: 0 0 15px 0; color: #aaa; font-size: 14px;" x-text="instrument.description || 'No description available'"></p>
+
+                    <!-- Metadata -->
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <!-- Profiles -->
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">Profiles:</div>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                <template x-for="profile in (instrument.profiles || ['default'])" :key="profile">
+                                    <span style="font-size: 11px; padding: 4px 8px; background: #2a4a2a; color: #8f8; border-radius: 3px;" x-text="profile"></span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">Tags:</div>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                <template x-if="!instrument.tags || instrument.tags.length === 0">
+                                    <span style="font-size: 11px; color: #666;">No tags</span>
+                                </template>
+                                <template x-for="tag in (instrument.tags || [])" :key="tag">
+                                    <span style="font-size: 11px; padding: 4px 8px; background: #2a2a4a; color: #88f; border-radius: 3px;" x-text="tag"></span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Priority -->
+                        <div style="min-width: 80px;">
+                            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">Priority:</div>
+                            <div style="font-size: 14px; font-weight: bold; color: white;" x-text="instrument.priority || 5"></div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Summary -->
+        <div x-show="!$store.instrumentManagerStore.loading && $store.instrumentManagerStore.instruments.length > 0" 
+             style="margin-top: 20px; padding: 15px; background: #1a1a1a; border-radius: 4px; font-size: 14px; color: #888;">
+            Showing <strong style="color: white;" x-text="$store.instrumentManagerStore.instruments.length"></strong> instrument(s)
+        </div>
+    </div>
+
+    <div class="modal-footer" style="padding: 20px; border-top: 1px solid #333; display: flex; justify-content: flex-end; gap: 10px;">
+        <button 
+            @click="$store.instrumentManagerStore.closeModal()"
+            style="padding: 10px 20px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; cursor: pointer;">
+            Close
+        </button>
+        <button 
+            @click="$store.instrumentManagerStore.loadInstruments()"
+            style="padding: 10px 20px; background: #2a4a2a; border: 1px solid #4a4; color: white; border-radius: 4px; cursor: pointer;">
+            Refresh
+        </button>
+    </div>
+    </div>
+    </template>
+</div>
+</body>
+
+</html>
+

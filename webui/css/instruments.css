@@ -1,0 +1,227 @@
+/**
+ * Instrument Manager Styles
+ * Additional styling for the instrument management interface
+ */
+
+/* Instrument Cards */
+.instrument-card {
+    transition: all 0.2s ease;
+}
+
+.instrument-card:hover {
+    border-color: #555 !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Profile Badges */
+.profile-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #2a4a2a;
+    color: #8f8;
+    border-radius: 3px;
+    display: inline-block;
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+/* Tag Badges */
+.tag-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #2a2a4a;
+    color: #88f;
+    border-radius: 3px;
+    display: inline-block;
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+/* Type Badge */
+.type-badge {
+    font-size: 12px;
+    padding: 3px 8px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    color: #888;
+    display: inline-block;
+}
+
+/* Filter Controls */
+.instrument-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-item {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-item label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 12px;
+    color: #888;
+}
+
+.filter-item select {
+    width: 100%;
+    padding: 8px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.filter-item select:hover {
+    border-color: #555;
+}
+
+.filter-item select:focus {
+    outline: none;
+    border-color: #6a6;
+}
+
+/* Loading State */
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #333;
+    border-top-color: #6a6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+    background: #1a1a1a;
+    border-radius: 8px;
+    border: 2px dashed #333;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+/* Error State */
+.error-message {
+    padding: 15px;
+    background: #2a1a1a;
+    border: 1px solid #aa0000;
+    border-radius: 4px;
+    color: #ff6666;
+    margin-bottom: 20px;
+}
+
+/* Buttons */
+.instrument-button {
+    padding: 6px 12px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.instrument-button:hover {
+    background: #3a3a3a;
+    border-color: #555;
+}
+
+.instrument-button:active {
+    transform: translateY(1px);
+}
+
+.instrument-button.primary {
+    background: #2a4a2a;
+    border-color: #4a4;
+}
+
+.instrument-button.primary:hover {
+    background: #3a5a3a;
+    border-color: #5a5;
+}
+
+/* Toggle Switch */
+.instrument-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.instrument-toggle input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+/* Priority Badge */
+.priority-badge {
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    padding: 4px 8px;
+    background: #333;
+    border-radius: 3px;
+}
+
+.priority-badge.high {
+    background: #4a2a2a;
+    color: #f88;
+}
+
+.priority-badge.medium {
+    background: #4a4a2a;
+    color: #ff8;
+}
+
+.priority-badge.low {
+    background: #2a4a2a;
+    color: #8f8;
+}
+
+/* Summary Bar */
+.instrument-summary {
+    margin-top: 20px;
+    padding: 15px;
+    background: #1a1a1a;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #888;
+}
+
+.instrument-summary strong {
+    color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .instrument-filters {
+        flex-direction: column;
+    }
+    
+    .filter-item {
+        width: 100%;
+    }
+    
+    .instrument-card {
+        padding: 15px !important;
+    }
+}
+

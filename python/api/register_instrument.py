@@ -29,7 +29,12 @@ class RegisterInstrument(ApiHandler):
             "workflow_name": "email_workflow",
             "webhook_url": "https://n8n.com/webhook/abc123",
             "description": "Send automated emails",
-            "parameters": ["recipient", "template", "data"]
+            "parameters": ["recipient", "template", "data"],
+            "profiles": ["default"],  # optional
+            "tags": [],  # optional
+            "priority": 5,  # optional
+            "display_name": "",  # optional
+            "category": ""  # optional
         }
         """
         # Extract parameters
@@ -37,6 +42,17 @@ class RegisterInstrument(ApiHandler):
         webhook_url = input.get("webhook_url", "").strip()
         description = input.get("description", "").strip()
         parameters = input.get("parameters", [])
+        
+        # Extract metadata parameters (with defaults)
+        profiles = input.get("profiles", ["default"])
+        if isinstance(profiles, str):
+            profiles = [p.strip() for p in profiles.split(",") if p.strip()]
+        tags = input.get("tags", [])
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        priority = input.get("priority", 5)
+        display_name = input.get("display_name", "").strip() or description
+        category = input.get("category", "").strip() or "N8N Workflow"
         
         # Validate inputs
         if not workflow_name:
@@ -130,6 +146,26 @@ python /a0/instruments/custom/n8n/bridge.py {workflow_name}{example_params}
             description_path = workflows_dir / f"{workflow_name}.md"
             with open(description_path, 'w') as f:
                 f.write(description_content)
+            
+            # Register metadata in central registry
+            from python.helpers.instrument_metadata import InstrumentMetadata
+            
+            instrument_id = f"n8n.{workflow_name}"
+            InstrumentMetadata.set_instrument_metadata(
+                instrument_id=instrument_id,
+                metadata={
+                    "type": "n8n",
+                    "source_path": f"instruments/custom/n8n/workflows/{workflow_name}.md",
+                    "profiles": profiles,
+                    "tags": tags,
+                    "priority": priority,
+                    "enabled": True,
+                    "metadata": {
+                        "display_name": display_name,
+                        "category": category
+                    }
+                }
+            )
             
             # Get context for memory reload
             ctxid = input.get("context_id", "")
