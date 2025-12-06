@@ -233,6 +233,54 @@ In this example:
 - `response.py` overrides the default response tool with custom behavior
 - `example_tool.py` is a new tool specific to this agent
 
+## Instrument Recall Extension
+
+Agent Zero includes a powerful Instrument Recall Extension that intelligently recalls relevant instruments from memory based on agent profile, task context, and metadata tags. This extension operates on a per-profile basis and integrates seamlessly with the memory and instrument systems.
+
+### Key Features
+
+- **Profile-Specific Filtering**: Only recalls instruments assigned to the active agent profile
+- **Context-Aware Search**: Uses current task and conversation history to find relevant instruments
+- **Priority Sorting**: Instruments with lower priority numbers are preferred
+- **Auto-Equip**: Force-include specific instruments regardless of context
+- **Exclusion Lists**: Prevent specific instruments from being recalled
+- **Tag-Based Filtering**: Filter instruments by metadata tags
+
+### Deploying to a Profile
+
+Use the deployment helper to add instrument recall to a profile:
+
+```bash
+# Deploy to specific profiles
+python -m python.helpers.deploy_instrument_recall --profiles researcher,developer
+
+# Validate deployment
+python -m python.helpers.deploy_instrument_recall --profiles researcher --validate
+```
+
+### Configuration
+
+Create `agents/{profile}/instruments.json` to configure recall behavior:
+
+```json
+{
+  "enabled": true,
+  "recall_interval": 5,
+  "max_instruments": 3,
+  "similarity_threshold": 0.4,
+  "auto_equip": ["n8n.slack_message"],
+  "excluded": ["n8n.deprecated_tool"],
+  "filters": {
+    "tags": ["analysis", "communication"],
+    "priority_max": 3
+  }
+}
+```
+
+For detailed documentation, see:
+- [Instrument Recall Extension Guide](extensions/instrument-recall.md)
+- [Profile Configuration Guide](profiles/instrument-configuration.md)
+
 ## Best Practices
 - Keep extensions focused on a single responsibility
 - Use the appropriate extension point for your functionality

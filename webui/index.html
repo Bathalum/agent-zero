@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="css/scheduler-datepicker.css">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/instruments.css">
+    <link rel="stylesheet" href="css/profiles.css">
 
     <!-- Flatpickr for datetime picker -->
     <link rel="stylesheet" href="vendor/flatpickr/flatpickr.min.css">
@@ -107,6 +108,7 @@
     <script defer src="vendor/alpine/alpine.collapse.min.js"></script>
     <!-- <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script> -->
     <script type="module" src="js/initFw.js"></script>
+    <script src="/js/componentLoader.js"></script>
 
     <script src="vendor/ace-min/ace.js"></script>
     <link href="vendor/ace-min/ace.min.css" rel="stylesheet">
@@ -130,6 +132,7 @@
     <script type="text/javascript" src="js/settings.js"></script>
     <script type="text/javascript" src="js/file_browser.js"></script>
     <script type="text/javascript" src="js/modal.js"></script>
+    <script src="/components/profiles/profile-store.js"></script>
 </head>
 
 <body class="dark-mode device-pointer">
@@ -158,6 +161,13 @@
         <div id="left-panel" class="panel">
             <!--Sidebar upper elements-->
             <div class="left-panel-top">
+                <!-- Profile Switcher -->
+                <div class="profile-switcher-container" x-data="{ loaded: false }" x-init="
+    if (!loaded) {
+        loadHtmlComponent('/components/profiles/profile-switcher.html', $el).then(() => { loaded = true; });
+    }
+"></div>
+
                 <div class="config-section" x-data="{ showQuickActions: true }">
                     <button class="config-button" id="resetChat" @click="resetChat()">Reset Chat</button>
                     <button class="config-button" id="newChat" @click="newChat()">New Chat</button>
@@ -181,6 +191,7 @@
                 </div>
 
                 <!-- Tabs container -->
+
                 <div class="tabs-container">
                     <div class="tabs">
                         <div class="tab active" id="chats-tab">Chats</div>
@@ -565,11 +576,13 @@
                                     @click="switchTab('scheduler')" title="Task Scheduler">Task Scheduler</div>
                                 <div class="settings-tab" :class="{'active': activeTab === 'backup'}"
                                     @click="switchTab('backup')" title="Backup & Restore">Backup & Restore</div>
+                                <div class="settings-tab" :class="{'active': activeTab === 'profiles'}"
+                                     @click="switchTab('profiles')" title="Profiles">Profiles</div>
                             </div>
                         </div>
 
                         <!-- Display settings sections for agent, external, developer, mcp, backup tabs -->
-                        <div id="settings-sections" x-show="activeTab !== 'scheduler'">
+                        <div id="settings-sections" x-show="activeTab !== 'scheduler' && activeTab !== 'profiles'">
                             <nav>
                                 <ul>
                                     <template x-for="(section, index) in filteredSections" :key="section.title">
@@ -690,6 +703,17 @@
                             <!-- Tunnel section content - only visible in External Services tab -->
                             <div id="section-tunnel" class="section" x-show="activeTab === 'external'">
                                 <x-component path="settings/tunnel/tunnel-section.html" />
+                            </div>
+                        </div>
+
+                        <!-- Profile Manager Section -->
+                        <div x-show="activeTab === 'profiles'" id="profiles-section">
+                            <div x-data="{ loaded: false }" x-init="
+                                if (!loaded) {
+                                    loadHtmlComponent('/components/profiles/profile-manager.html', $el.querySelector('.profile-content')).then(() => { loaded = true; });
+                                }
+                            ">
+                                <div class="profile-content"></div>
                             </div>
                         </div>
 

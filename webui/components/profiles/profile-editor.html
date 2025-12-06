@@ -1,0 +1,504 @@
+<div class="profile-editor-modal" x-data="profileEditorData()">
+    <div class="modal-header">
+        <div>
+            <h2>
+                <span x-show="!isBuiltin">Edit Profile: </span>
+                <span x-show="isBuiltin">View Profile: </span>
+                <span x-text="metadata.display_name || profileId"></span>
+            </h2>
+            <p class="subtitle" x-show="isBuiltin" style="color: #ff9800; margin-top: 0.5rem;">
+                <i class="material-icons" style="font-size: 16px; vertical-align: middle;">info</i>
+                Built-in profiles are read-only. Duplicate to create a custom version.
+            </p>
+        </div>
+        <button @click="closeModal()" class="close-btn">&times;</button>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+        <button class="tab-btn" :class="{ 'active': activeTab === 'basic' }" @click="activeTab = 'basic'">
+            <i class="material-icons">person</i> Basic Info
+        </button>
+        <button class="tab-btn" :class="{ 'active': activeTab === 'behavior' }" @click="activeTab = 'behavior'">
+            <i class="material-icons">psychology</i> Behavior
+        </button>
+        <button class="tab-btn" :class="{ 'active': activeTab === 'extensions' }" @click="activeTab = 'extensions'">
+            <i class="material-icons">extension</i> Extensions
+        </button>
+        <button class="tab-btn" :class="{ 'active': activeTab === 'tools' }" @click="activeTab = 'tools'">
+            <i class="material-icons">build</i> Tools
+        </button>
+        <button class="tab-btn" :class="{ 'active': activeTab === 'skills' }" @click="activeTab = 'skills'">
+            <i class="material-icons">construction</i> Skills
+        </button>
+        <button class="tab-btn" :class="{ 'active': activeTab === 'config' }" @click="activeTab = 'config'">
+            <i class="material-icons">settings</i> Configuration
+        </button>
+    </div>
+
+    <div class="modal-body">
+        <!-- Tab: Basic Info -->
+        <div x-show="activeTab === 'basic'" class="tab-content">
+            <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" x-model="metadata.display_name" :disabled="isBuiltin" placeholder="My Custom Agent">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea x-model="metadata.description" :disabled="isBuiltin" rows="3" placeholder="Specialized in..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select x-model="metadata.category" :disabled="isBuiltin">
+                    <option value="General">General</option>
+                    <option value="Development">Development</option>
+                    <option value="Research">Research</option>
+                    <option value="Security">Security</option>
+                    <option value="Creative">Creative</option>
+                    <option value="Analysis">Analysis</option>
+                    <option value="Custom">Custom</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Avatar Icon</label>
+                    <select x-model="metadata.avatar_icon" :disabled="isBuiltin">
+                        <option value="default">Default</option>
+                        <option value="code">Code</option>
+                        <option value="research">Research</option>
+                        <option value="security">Security</option>
+                        <option value="creative">Creative</option>
+                        <option value="analysis">Analysis</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Avatar Color</label>
+                    <input type="color" x-model="metadata.avatar_color" :disabled="isBuiltin">
+                </div>
+            </div>
+            <div class="avatar-preview-large" :style="`background-color: ${metadata.avatar_color || '#4A90E2'}`">
+                <i :class="`icon-${metadata.avatar_icon || 'default'}`"></i>
+            </div>
+        </div>
+
+        <!-- Tab: Behavior (Prompts) -->
+        <div x-show="activeTab === 'behavior'" class="tab-content">
+            <div class="behavior-section">
+                <div class="prompt-selector">
+                    <label>Prompt File</label>
+                    <select x-model="selectedPromptFile" @change="loadPrompt()">
+                        <option value="agent.system.main.role.md">Role (Identity & Capabilities)</option>
+                        <option value="agent.system.main.communication.md">Communication (Style & Format)</option>
+                        <option value="agent.system.main.environment.md">Environment (Context & Constraints)</option>
+                    </select>
+                </div>
+                
+                <div class="prompt-editor">
+                    <div class="editor-toolbar">
+                        <button @click="promptEditMode = 'visual'" :class="{ 'active': promptEditMode === 'visual' }" :disabled="isBuiltin">
+                            <i class="material-icons">view_module</i> Visual Editor
+                        </button>
+                        <button @click="promptEditMode = 'markdown'" :class="{ 'active': promptEditMode === 'markdown' }" :disabled="isBuiltin">
+                            <i class="material-icons">code</i> Markdown
+                        </button>
+                        <button @click="savePrompt()" :disabled="isBuiltin || !promptChanged" class="btn-primary btn-sm">
+                            <i class="material-icons">save</i> Save Prompt
+                        </button>
+                    </div>
+                    
+                    <!-- Visual Editor -->
+                    <div x-show="promptEditMode === 'visual'" class="visual-prompt-editor">
+                        <p class="info-text">Edit in structured format (coming soon - use Markdown editor for now)</p>
+                    </div>
+                    
+                    <!-- Markdown Editor -->
+                    <div x-show="promptEditMode === 'markdown'" class="markdown-prompt-editor">
+                        <textarea 
+                            x-model="promptContent" 
+                            @input="promptChanged = true"
+                            :disabled="isBuiltin"
+                            rows="20" 
+                            class="code-editor"
+                            placeholder="# Agent Prompt&#10;&#10;Write your prompt here in Markdown..."></textarea>
+                    </div>
+                    
+                    <!-- Preview -->
+                    <div class="prompt-preview">
+                        <h4>Preview</h4>
+                        <div class="markdown-preview" x-html="renderMarkdown(promptContent)"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Extensions -->
+        <div x-show="activeTab === 'extensions'" class="tab-content">
+            <div class="section-header">
+                <h3>Extensions</h3>
+                <button @click="addExtension()" :disabled="isBuiltin" class="btn-primary btn-sm">
+                    <i class="material-icons">add</i> Add Extension
+                </button>
+            </div>
+            <div class="extensions-list">
+                <template x-for="ext in extensions" :key="ext">
+                    <div class="extension-item">
+                        <div class="extension-info">
+                            <i class="material-icons">extension</i>
+                            <span x-text="ext"></span>
+                        </div>
+                        <div class="extension-actions">
+                            <button @click="viewExtension(ext)" class="btn-secondary btn-sm">
+                                <i class="material-icons">visibility</i>
+                            </button>
+                            <button @click="editExtension(ext)" :disabled="isBuiltin" class="btn-secondary btn-sm">
+                                <i class="material-icons">edit</i>
+                            </button>
+                            <button @click="removeExtension(ext)" :disabled="isBuiltin" class="btn-danger btn-sm">
+                                <i class="material-icons">delete</i>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="extensions.length === 0" class="empty-state">
+                    <i class="material-icons">extension</i>
+                    <p>No extensions configured</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Tools -->
+        <div x-show="activeTab === 'tools'" class="tab-content">
+            <div class="section-header">
+                <h3>Custom Tools</h3>
+                <button @click="addTool()" :disabled="isBuiltin" class="btn-primary btn-sm">
+                    <i class="material-icons">add</i> Add Tool
+                </button>
+            </div>
+            <div class="tools-list">
+                <template x-for="tool in tools" :key="tool">
+                    <div class="tool-item">
+                        <div class="tool-info">
+                            <i class="material-icons">build</i>
+                            <span x-text="tool"></span>
+                        </div>
+                        <div class="tool-actions">
+                            <button @click="viewTool(tool)" class="btn-secondary btn-sm">
+                                <i class="material-icons">visibility</i>
+                            </button>
+                            <button @click="editTool(tool)" :disabled="isBuiltin" class="btn-secondary btn-sm">
+                                <i class="material-icons">edit</i>
+                            </button>
+                            <button @click="removeTool(tool)" :disabled="isBuiltin" class="btn-danger btn-sm">
+                                <i class="material-icons">delete</i>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="tools.length === 0" class="empty-state">
+                    <i class="material-icons">build</i>
+                    <p>No custom tools</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Skills (Instruments) -->
+        <div x-show="activeTab === 'skills'" class="tab-content">
+            <div class="section-header">
+                <h3>Equipped Skills (Instruments)</h3>
+            </div>
+            <div class="instruments-list">
+                <template x-for="instrument in allInstruments" :key="instrument.id">
+                    <div class="instrument-item">
+                        <div class="instrument-info">
+                            <span class="instrument-name" x-text="instrument.display_name"></span>
+                            <span class="instrument-tags">
+                                <template x-for="tag in instrument.tags" :key="tag">
+                                    <span class="tag" x-text="tag"></span>
+                                </template>
+                            </span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" 
+                                   :checked="isInstrumentAssigned(instrument.id)" 
+                                   @change="toggleInstrument(instrument.id, $event.target.checked)"
+                                   :disabled="isBuiltin">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Tab: Configuration -->
+        <div x-show="activeTab === 'config'" class="tab-content">
+            <div class="section-header">
+                <h3>Instrument Recall Configuration</h3>
+            </div>
+            <div class="config-form">
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" x-model="config.enabled" :disabled="isBuiltin">
+                        <span>Enable Instrument Recall</span>
+                    </label>
+                </div>
+                <div x-show="config.enabled">
+                    <div class="form-group">
+                        <label>Recall Interval (messages)</label>
+                        <input type="number" x-model.number="config.recall_interval" :disabled="isBuiltin" min="1" max="20">
+                        <small>How often to check for relevant instruments</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Max Instruments per Recall</label>
+                        <input type="number" x-model.number="config.max_instruments" :disabled="isBuiltin" min="1" max="10">
+                        <small>Maximum number of instruments to equip at once</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Similarity Threshold</label>
+                        <input type="number" x-model.number="config.similarity_threshold" :disabled="isBuiltin" min="0" max="1" step="0.1">
+                        <small>Minimum similarity score (0.0 - 1.0)</small>
+                    </div>
+                </div>
+                <button @click="saveConfig()" :disabled="isBuiltin" class="btn-primary">
+                    <i class="material-icons">save</i> Save Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-footer">
+        <button @click="closeModal()" class="btn-secondary">Close</button>
+        <button @click="saveAllChanges()" :disabled="isBuiltin || saving" class="btn-primary">
+            <span x-show="!saving">Save All Changes</span>
+            <span x-show="saving">Saving...</span>
+        </button>
+    </div>
+</div>
+
+<script>
+function profileEditorData() {
+    return {
+        profileId: null,
+        isBuiltin: false,
+        metadata: {},
+        config: {},
+        extensions: [],
+        tools: [],
+        allInstruments: [],
+        assignedInstruments: [],
+        activeTab: 'basic',
+        selectedPromptFile: 'agent.system.main.role.md',
+        promptContent: '',
+        promptEditMode: 'markdown',
+        promptChanged: false,
+        saving: false,
+
+        async init() {
+            this.profileId = window.modalParams?.profileId;
+            if (this.profileId) {
+                await this.loadAllData();
+            }
+        },
+
+        async loadAllData() {
+            await this.loadProfileMetadata();
+            await this.loadConfig();
+            await this.loadExtensions();
+            await this.loadTools();
+            await this.loadInstruments();
+            await this.loadPrompt();
+        },
+
+        async loadProfileMetadata() {
+            const meta = await profileStore.getProfileMetadata(this.profileId);
+            this.metadata = meta || {};
+            this.isBuiltin = !this.metadata.is_custom;
+        },
+
+        async loadConfig() {
+            const cfg = await profileStore.getConfig(this.profileId);
+            this.config = cfg || {
+                enabled: false,
+                recall_interval: 5,
+                max_instruments: 2,
+                similarity_threshold: 0.4
+            };
+        },
+
+        async loadExtensions() {
+            const result = await profileStore.manageExtensions(this.profileId, 'list');
+            this.extensions = result.success ? result.extensions : [];
+        },
+
+        async loadTools() {
+            const result = await profileStore.manageTools(this.profileId, 'list');
+            this.tools = result.success ? result.tools : [];
+        },
+
+        async loadInstruments() {
+            const resp = await fetchApi('/api/instrument_list', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await resp.json();
+            this.allInstruments = data.instruments || [];
+            this.assignedInstruments = this.metadata.enabled_instruments || [];
+        },
+
+        async loadPrompt() {
+            const content = await profileStore.getPrompt(this.profileId, this.selectedPromptFile);
+            this.promptContent = content || '';
+            this.promptChanged = false;
+        },
+
+        async savePrompt() {
+            const result = await profileStore.setPrompt(this.profileId, this.selectedPromptFile, this.promptContent);
+            if (result.success) {
+                if (window.showNotification) showNotification('Prompt saved', 'success');
+                this.promptChanged = false;
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to save prompt', 'error');
+            }
+        },
+
+        async saveConfig() {
+            const result = await profileStore.setConfig(this.profileId, this.config);
+            if (result.success) {
+                if (window.showNotification) showNotification('Configuration saved', 'success');
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to save config', 'error');
+            }
+        },
+
+        isInstrumentAssigned(instrumentId) {
+            return this.assignedInstruments.includes(instrumentId);
+        },
+
+        async toggleInstrument(instrumentId, isAssigned) {
+            if (isAssigned) {
+                await profileStore.assignInstrument(this.profileId, instrumentId);
+                if (!this.assignedInstruments.includes(instrumentId)) {
+                    this.assignedInstruments.push(instrumentId);
+                }
+            } else {
+                await profileStore.unassignInstrument(this.profileId, instrumentId);
+                this.assignedInstruments = this.assignedInstruments.filter(id => id !== instrumentId);
+            }
+            this.metadata.enabled_instruments = this.assignedInstruments;
+        },
+
+        async addExtension() {
+            const path = prompt('Enter extension path (e.g., message_loop_prompts_after/_55_my_extension.py):');
+            if (!path) return;
+            const content = '# Extension code\n# TODO: Implement extension\n';
+            const result = await profileStore.manageExtensions(this.profileId, 'add', path, content);
+            if (result.success) {
+                if (window.showNotification) showNotification('Extension added', 'success');
+                await this.loadExtensions();
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to add extension', 'error');
+            }
+        },
+
+        async viewExtension(path) {
+            const result = await profileStore.manageExtensions(this.profileId, 'get', path);
+            if (result.success) {
+                alert(`Extension: ${path}\n\n${result.content}`);
+            }
+        },
+
+        async editExtension(path) {
+            const result = await profileStore.manageExtensions(this.profileId, 'get', path);
+            if (result.success) {
+                const newContent = prompt(`Edit extension: ${path}`, result.content);
+                if (newContent !== null) {
+                    const updateResult = await profileStore.manageExtensions(this.profileId, 'add', path, newContent);
+                    if (updateResult.success) {
+                        if (window.showNotification) showNotification('Extension updated', 'success');
+                    }
+                }
+            }
+        },
+
+        async removeExtension(path) {
+            if (!confirm(`Remove extension: ${path}?`)) return;
+            const result = await profileStore.manageExtensions(this.profileId, 'remove', path);
+            if (result.success) {
+                if (window.showNotification) showNotification('Extension removed', 'success');
+                await this.loadExtensions();
+            }
+        },
+
+        async addTool() {
+            const filename = prompt('Enter tool filename (e.g., my_tool.py):');
+            if (!filename) return;
+            const content = '# Tool code\nfrom python.helpers.tool import Tool\n# TODO: Implement tool\n';
+            const result = await profileStore.manageTools(this.profileId, 'add', filename, content);
+            if (result.success) {
+                if (window.showNotification) showNotification('Tool added', 'success');
+                await this.loadTools();
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to add tool', 'error');
+            }
+        },
+
+        async viewTool(filename) {
+            const result = await profileStore.manageTools(this.profileId, 'get', filename);
+            if (result.success) {
+                alert(`Tool: ${filename}\n\n${result.content}`);
+            }
+        },
+
+        async editTool(filename) {
+            const result = await profileStore.manageTools(this.profileId, 'get', filename);
+            if (result.success) {
+                const newContent = prompt(`Edit tool: ${filename}`, result.content);
+                if (newContent !== null) {
+                    const updateResult = await profileStore.manageTools(this.profileId, 'add', filename, newContent);
+                    if (updateResult.success) {
+                        if (window.showNotification) showNotification('Tool updated', 'success');
+                    }
+                }
+            }
+        },
+
+        async removeTool(filename) {
+            if (!confirm(`Remove tool: ${filename}?`)) return;
+            const result = await profileStore.manageTools(this.profileId, 'remove', filename);
+            if (result.success) {
+                if (window.showNotification) showNotification('Tool removed', 'success');
+                await this.loadTools();
+            }
+        },
+
+        async saveAllChanges() {
+            this.saving = true;
+            const success = await profileStore.updateProfileMetadata(this.profileId, this.metadata);
+            if (success) {
+                if (window.showNotification) showNotification('Profile updated successfully', 'success');
+                window.dispatchEvent(new CustomEvent('profile-updated'));
+            } else {
+                if (window.showNotification) showNotification('Failed to update profile', 'error');
+            }
+            this.saving = false;
+        },
+
+        renderMarkdown(text) {
+            // Simple markdown rendering (basic)
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>')
+                .replace(/^# (.*)/gm, '<h1>$1</h1>')
+                .replace(/^## (.*)/gm, '<h2>$1</h2>')
+                .replace(/^### (.*)/gm, '<h3>$1</h3>');
+        },
+
+        closeModal() {
+            if (window.closeModal) closeModal();
+        }
+    }
+}
+</script>

@@ -231,9 +231,17 @@ def run():
         if handler.requires_csrf():
             handler_wrap = csrf_protect(handler_wrap)
 
+        # Register both legacy and prefixed routes for backward compatibility
         app.add_url_rule(
             f"/{name}",
             f"/{name}",
+            handler_wrap,
+            methods=handler.get_methods(),
+        )
+
+        app.add_url_rule(
+            f"/api/{name}",
+            f"/api/{name}",
             handler_wrap,
             methods=handler.get_methods(),
         )

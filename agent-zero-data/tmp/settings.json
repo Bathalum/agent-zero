@@ -58,7 +58,7 @@
     "auth_login": "",
     "auth_password": "",
     "root_password": "",
-    "agent_profile": "agent0",
+    "agent_profile": "hacker",
     "agent_memory_subdir": "default",
     "agent_knowledge_subdir": "custom",
     "rfc_auto_docker": true,
@@ -81,5 +81,10 @@
     "a2a_server_enabled": false,
     "variables": "",
     "secrets": "",
-    "litellm_global_kwargs": {}
+    "litellm_global_kwargs": {},
+    "instrument_recall_enabled": false,
+    "instrument_recall_interval": 5,
+    "instrument_recall_max_search": 8,
+    "instrument_recall_max_result": 3,
+    "instrument_recall_similarity_threshold": 0.4
 }

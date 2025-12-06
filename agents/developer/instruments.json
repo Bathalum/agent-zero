@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "recall_interval": 5,
+  "max_instruments": 2,
+  "similarity_threshold": 0.4,
+  "auto_equip": [
+    "n8n.slack_message"
+  ],
+  "excluded": [],
+  "filters": {
+    "tags": [
+      "development",
+      "deployment",
+      "communication"
+    ],
+    "priority_max": 5
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "recall_interval": 3,
+  "max_instruments": 3,
+  "similarity_threshold": 0.35,
+  "auto_equip": [],
+  "excluded": [],
+  "filters": {
+    "tags": [
+      "analysis",
+      "data",
+      "communication"
+    ],
+    "priority_max": 3
+  }
+}

@@ -66,7 +66,7 @@ From now on, please use this name for both `git clone` and `docker pull` command
 - Tool usage functionality has been developed from scratch to be the most compatible and reliable, even with very small models.
 - **Default Tools:** Agent Zero includes tools like knowledge, code execution, and communication.
 - **Creating Custom Tools:** Extend Agent Zero's functionality by creating your own custom tools.
-- **Instruments:** Instruments are a new type of tool that allow you to create custom functions and procedures that can be called by Agent Zero.
+- **Instruments:** Instruments are a new type of tool that allow you to create custom functions and procedures that can be called by Agent Zero. The optional Instrument Recall Extension can intelligently suggest relevant instruments based on agent profile and task context.
 
 3. **Multi-agent Cooperation**
 

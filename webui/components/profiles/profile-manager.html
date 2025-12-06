@@ -1,0 +1,202 @@
+<div class="profile-manager" x-data="profileManagerData()">
+    <div class="profile-header">
+        <h2>Agent Profiles</h2>
+        <p class="subtitle">Configure agent personalities and skills</p>
+        <div class="header-actions">
+            <button @click="createBlankProfile()" class="btn-primary">
+                <i class="material-icons">add</i> Create New Profile
+            </button>
+            <button @click="importProfile()" class="btn-secondary">
+                <i class="material-icons">upload</i> Import Profile
+            </button>
+        </div>
+    </div>
+    <div x-show="loading" class="loading-spinner"><span>Loading profiles...</span></div>
+    <div x-show="error" class="error-message"><span x-text="error"></span></div>
+    <div x-show="!loading && !error" class="profile-grid">
+        <template x-for="profile in profiles" :key="profile.id">
+            <div class="profile-card" :class="{ 'active': profile.id === currentProfile, 'builtin': !profile.is_custom }" @click="selectProfile(profile)">
+                <div class="profile-header-row">
+                    <div class="profile-badge" x-show="!profile.is_custom">Built-in</div>
+                    <div class="profile-badge custom" x-show="profile.is_custom">Custom</div>
+                </div>
+                <div class="profile-avatar" :style="`background-color: ${profile.avatar_color || '#4A90E2'}`">
+                    <i :class="`icon-${profile.avatar_icon || 'default'}`"></i>
+                </div>
+                <div class="profile-info">
+                    <h3 class="profile-name" x-text="profile.display_name || profile.name"></h3>
+                    <p class="profile-description" x-text="profile.description"></p>
+                    <div class="profile-stats">
+                        <span class="stat"><i class="material-icons">construction</i><span x-text="profile.instrument_count || 0"></span> skills</span>
+                        <span class="stat" x-show="profile.has_extensions"><i class="material-icons">auto_awesome</i> Smart Recall</span>
+                    </div>
+                </div>
+                <div class="profile-actions">
+                    <button x-show="profile.id !== currentProfile" @click.stop="switchToProfile(profile.id)" class="btn-primary btn-sm">Switch</button>
+                    <span x-show="profile.id === currentProfile" class="badge-active">Active</span>
+                    <button @click.stop="editProfile(profile)" class="btn-secondary btn-sm">
+                        <i class="material-icons">edit</i> Edit
+                    </button>
+                    <button @click.stop="duplicateProfile(profile)" class="btn-secondary btn-sm">
+                        <i class="material-icons">content_copy</i> Duplicate
+                    </button>
+                    <button x-show="profile.is_custom && profile.id !== currentProfile" @click.stop="deleteProfile(profile)" class="btn-danger btn-sm">
+                        <i class="material-icons">delete</i>
+                    </button>
+                    <button @click.stop="exportProfileAction(profile)" class="btn-secondary btn-sm">
+                        <i class="material-icons">download</i>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function profileManagerData() {
+    return {
+        profiles: [],
+        currentProfile: null,
+        loading: true,
+        error: null,
+        
+        async init() { 
+            await this.loadProfiles(); 
+        },
+        
+        async loadProfiles() {
+            this.loading = true;
+            await profileStore.fetchProfiles();
+            this.profiles = profileStore.profiles;
+            this.currentProfile = profileStore.currentProfile;
+            this.error = profileStore.error;
+            this.loading = false;
+        },
+        
+        selectProfile(profile) { 
+            this.editProfile(profile); 
+        },
+        
+        async switchToProfile(profileId) {
+            const success = await profileStore.switchProfile(profileId);
+            if (success) {
+                this.currentProfile = profileId;
+                if (window.showNotification) showNotification('Profile switched successfully', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                if (window.showNotification) showNotification('Failed to switch profile', 'error');
+            }
+        },
+        
+        editProfile(profile) { 
+            if (window.openModal) openModal('profiles/profile-editor.html', { profileId: profile.id }); 
+        },
+        
+        async createBlankProfile() {
+            const profileId = await this.promptProfileName('Create New Profile', 'Enter profile name (lowercase, use underscores):');
+            if (!profileId) return;
+            
+            const metadata = {
+                display_name: profileId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                description: 'Custom agent profile'
+            };
+            
+            const result = await profileStore.createProfile(profileId, null, metadata);
+            if (result.success) {
+                if (window.showNotification) showNotification('Profile created successfully', 'success');
+                await this.loadProfiles();
+                this.editProfile({ id: profileId });
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to create profile', 'error');
+            }
+        },
+        
+        async duplicateProfile(profile) {
+            const profileId = await this.promptProfileName(
+                `Duplicate "${profile.display_name || profile.name}"`,
+                'Enter new profile name (lowercase, use underscores):'
+            );
+            if (!profileId) return;
+            
+            const metadata = {
+                display_name: profileId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                description: `Copy of ${profile.display_name || profile.name}`
+            };
+            
+            const result = await profileStore.createProfile(profileId, profile.id, metadata);
+            if (result.success) {
+                if (window.showNotification) showNotification('Profile duplicated successfully', 'success');
+                await this.loadProfiles();
+                this.editProfile({ id: profileId });
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to duplicate profile', 'error');
+            }
+        },
+        
+        async deleteProfile(profile) {
+            const confirmed = confirm(`Are you sure you want to delete "${profile.display_name || profile.name}"? This cannot be undone.`);
+            if (!confirmed) return;
+            
+            const result = await profileStore.deleteProfile(profile.id);
+            if (result.success) {
+                if (window.showNotification) showNotification('Profile deleted successfully', 'success');
+                await this.loadProfiles();
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to delete profile', 'error');
+            }
+        },
+        
+        async exportProfileAction(profile) {
+            const result = await profileStore.exportProfile(profile.id);
+            if (result.success) {
+                if (window.showNotification) showNotification('Profile exported successfully', 'success');
+            } else {
+                if (window.showNotification) showNotification(result.error || 'Failed to export profile', 'error');
+            }
+        },
+        
+        async importProfile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.zip';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const profileId = await this.promptProfileName(
+                    'Import Profile',
+                    'Enter profile name (lowercase, use underscores):'
+                );
+                if (!profileId) return;
+                
+                // Read file as base64
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const base64Data = event.target.result.split(',')[1];
+                    const result = await profileStore.importProfile(profileId, base64Data);
+                    if (result.success) {
+                        if (window.showNotification) showNotification('Profile imported successfully', 'success');
+                        await this.loadProfiles();
+                        this.editProfile({ id: profileId });
+                    } else {
+                        if (window.showNotification) showNotification(result.error || 'Failed to import profile', 'error');
+                    }
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+        },
+        
+        async promptProfileName(title, message) {
+            const name = prompt(`${title}\n\n${message}`);
+            if (!name) return null;
+            
+            // Convert to valid profile ID
+            return name.toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_{2,}/g, '_').replace(/^_|_$/g, '');
+        }
+    }
+}
+</script>
+
+
+

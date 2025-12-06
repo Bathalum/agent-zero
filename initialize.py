@@ -70,12 +70,22 @@ def initialize_agent():
         kwargs=_normalize_model_kwargs(current_settings["browser_model_kwargs"]),
     )
     # agent configuration
+    profile = current_settings["agent_profile"]
+    
+    # Validate profile exists, fallback to agent0 if not found
+    from python.helpers import files
+    import os
+    profile_path = files.get_abs_path("agents", profile)
+    if not os.path.exists(profile_path):
+        profile = "agent0"
+        settings.set_settings_delta({"agent_profile": "agent0"})
+    
     config = AgentConfig(
         chat_model=chat_llm,
         utility_model=utility_llm,
         embeddings_model=embedding_llm,
         browser_model=browser_llm,
-        profile=current_settings["agent_profile"],
+        profile=profile,
         memory_subdir=current_settings["agent_memory_subdir"],
         knowledge_subdirs=[current_settings["agent_knowledge_subdir"], "default"],
         mcp_servers=current_settings["mcp_servers"],

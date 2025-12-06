@@ -1,0 +1,110 @@
+<div class="profile-switcher" x-data="profileSwitcherData()">
+    <!-- Loading State -->
+    <div x-show="loading" class="profile-loading">
+        <div class="profile-avatar-mini" style="background-color: #666;">
+            <i class="icon-loading"></i>
+        </div>
+        <span>Loading...</span>
+    </div>
+    
+    <!-- Error State -->
+    <div x-show="error && !loading" class="profile-error">
+        <div class="profile-avatar-mini" style="background-color: #e74c3c;">
+            <i class="icon-error"></i>
+        </div>
+        <span>Error</span>
+    </div>
+    
+    <!-- Normal State -->
+    <button x-show="!loading && !error" class="profile-indicator" @click="toggleDropdown()">
+        <div class="profile-avatar-mini" :style="`background-color: ${currentProfileColor}`">
+            <i :class="`icon-${currentProfileIcon}`"></i>
+        </div>
+        <span x-text="currentProfileName"></span>
+        <i class="icon-chevron-down"></i>
+    </button>
+    <div x-show="dropdownOpen" @click.away="dropdownOpen = false" class="profile-dropdown">
+        <div class="dropdown-header">Switch Profile</div>
+        <template x-for="profile in profiles" :key="profile.id">
+            <div class="dropdown-item" :class="{ 'active': profile.id === currentProfileId }" @click="switchProfile(profile.id)">
+                <div class="profile-avatar-mini" :style="`background-color: ${profile.avatar_color || '#4A90E2'}`">
+                    <i :class="`icon-${profile.avatar_icon || 'default'}`"></i>
+                </div>
+                <span x-text="profile.display_name || profile.name"></span>
+                <i x-show="profile.id === currentProfileId" class="icon-check"></i>
+            </div>
+        </template>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" @click="openProfileManager()">
+            <i class="icon-settings"></i>
+            <span>Manage Profiles</span>
+        </div>
+    </div>
+</div>
+
+<script>
+function profileSwitcherData() {
+    return {
+        profiles: [],
+        currentProfileId: null,
+        currentProfileName: 'Default',
+        currentProfileIcon: 'default',
+        currentProfileColor: '#4A90E2',
+        dropdownOpen: false,
+        loading: true,
+        error: null,
+        
+        async init() {
+            this.loading = true;
+            this.error = null;
+            
+            try {
+                await profileStore.fetchProfiles();
+                this.profiles = profileStore.profiles;
+                this.currentProfileId = profileStore.currentProfile;
+                this.updateCurrentProfile();
+                
+                if (profileStore.error) {
+                    this.error = profileStore.error;
+                }
+            } catch (err) {
+                this.error = err.message || 'Failed to load profiles';
+                console.error('Profile switcher error:', err);
+            } finally {
+                this.loading = false;
+            }
+        },
+        updateCurrentProfile() {
+            const current = this.profiles.find(p => p.id === this.currentProfileId);
+            if (current) {
+                this.currentProfileName = current.display_name || current.name;
+                this.currentProfileIcon = current.avatar_icon || 'default';
+                this.currentProfileColor = current.avatar_color || '#4A90E2';
+            }
+        },
+        toggleDropdown() { this.dropdownOpen = !this.dropdownOpen; },
+        async switchProfile(profileId) {
+            const success = await profileStore.switchProfile(profileId);
+            if (success) {
+                this.currentProfileId = profileId;
+                this.updateCurrentProfile();
+                this.dropdownOpen = false;
+                if (window.showNotification) showNotification('Profile switched', 'success');
+                // Refetch to verify persistence instead of blind reload
+                try {
+                    await profileStore.fetchProfiles();
+                    this.currentProfileId = profileStore.currentProfile;
+                    this.updateCurrentProfile();
+                } catch (e) {}
+                setTimeout(() => location.reload(), 800);
+            }
+        },
+        openProfileManager() {
+            this.dropdownOpen = false;
+            if (window.openModal) openModal('profiles/profile-manager.html');
+        }
+    }
+}
+</script>
+
+

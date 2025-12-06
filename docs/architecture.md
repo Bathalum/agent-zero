@@ -270,7 +270,7 @@ Knowledge refers to the user-provided information and data that agents can lever
 Instruments provide a way to add custom functionalities to Agent Zero without adding to the token count of the system prompt:
 - Stored in long-term memory of Agent Zero
 - Unlimited number of instruments available
-- Recalled when needed by the agent
+- Recalled when needed by the agent (manually via knowledge tool or automatically via Instrument Recall Extension)
 - Can modify agent behavior by introducing new procedures
 - Function calls or scripts to integrate with other systems
 - Scripts are run inside the Docker Container
@@ -280,6 +280,20 @@ Instruments provide a way to add custom functionalities to Agent Zero without ad
 2. Add `.md` description file for the interface
 3. Add `.sh` script (or other executable) for implementation
 4. The agent will automatically detect and use the instrument
+
+#### Dynamic Instrument Recall
+Agent Zero includes an optional Instrument Recall Extension that intelligently recalls relevant instruments based on:
+- Agent profile and task context
+- Metadata tags and priority levels
+- Similarity-based search in vector memory
+- Profile-specific configuration (auto-equip, exclusions, filters)
+
+This extension operates on a per-profile basis and can be deployed using:
+```bash
+python -m python.helpers.deploy_instrument_recall --profiles researcher,developer
+```
+
+See [Instrument Recall Extension](extensions/instrument-recall.md) for details.
 
 ### 7. Extensions
 Extensions are a powerful feature of Agent Zero, designed to keep the main codebase clean and organized while allowing for greater flexibility and modularity.
