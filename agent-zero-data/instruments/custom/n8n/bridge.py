@@ -164,19 +164,24 @@ class N8NBridge:
                 elif status_code == 500:
                     return False, "Server error (500). Check n8n workflow configuration."
                 else:
-                    # Try to parse error message
+                    # Read error response body once and reuse it
                     try:
-                        error_data = json.loads(e.read().decode('utf-8'))
+                        error_body = e.read().decode('utf-8')
+                    except:
+                        error_body = ""
+                    
+                    # Try to parse error message as JSON
+                    try:
+                        error_data = json.loads(error_body)
                         error_msg = error_data.get("message", error_data.get("error", f"HTTP {status_code}"))
                         return False, error_msg
                     except:
                         # Check if HTML error page
                         try:
-                            error_text = e.read().decode('utf-8')
-                            if "<html" in error_text.lower() or "<!doctype" in error_text.lower():
-                                error_msg = self._parse_html_error(error_text)
+                            if "<html" in error_body.lower() or "<!doctype" in error_body.lower():
+                                error_msg = self._parse_html_error(error_body)
                                 return False, error_msg
-                            return False, f"HTTP {status_code}: {error_text[:100]}"
+                            return False, f"HTTP {status_code}: {error_body[:100]}"
                         except:
                             return False, f"HTTP {status_code} error"
                     
