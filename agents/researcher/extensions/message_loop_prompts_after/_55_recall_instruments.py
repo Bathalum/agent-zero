@@ -44,18 +44,18 @@ class RecallInstruments(Extension):
     """
     
     async def execute(self, loop_data: LoopData = LoopData(), **kwargs):
-        set = settings.get_settings()
+        settings_dict = settings.get_settings()
         
         # Load and apply profile-specific config
         profile_config = self._load_profile_config()
-        set = self._apply_profile_config(set, profile_config)
+        settings_dict = self._apply_profile_config(settings_dict, profile_config)
         
         # Check if instrument recall is enabled (after profile override)
-        if not set.get("instrument_recall_enabled", False):
+        if not settings_dict.get("instrument_recall_enabled", False):
             return
         
         # Check interval - recall every X iterations
-        if loop_data.iteration % set.get("instrument_recall_interval", 5) != 0:
+        if loop_data.iteration % settings_dict.get("instrument_recall_interval", 5) != 0:
             return
         
         # Create log item to show progress
@@ -66,14 +66,14 @@ class RecallInstruments(Extension):
         
         # Start async task for instrument search
         task = asyncio.create_task(
-            self.search_instruments(loop_data=loop_data, log_item=log_item, profile_config=profile_config, **kwargs)
+            self.search_instruments(loop_data=loop_data, log_item=log_item, profile_config=profile_config, merged_settings=settings_dict, **kwargs)
         )
         
         # Store task and iteration for wait extension
         self.agent.set_data(DATA_NAME_TASK, task)
         self.agent.set_data(DATA_NAME_ITER, loop_data.iteration)
     
-    async def search_instruments(self, log_item: log.LogItem, loop_data: LoopData, profile_config: dict, **kwargs):
+    async def search_instruments(self, log_item: log.LogItem, loop_data: LoopData, profile_config: dict, merged_settings: dict, **kwargs):
         """
         Search memory for relevant instruments based on task context and profile.
         
@@ -84,7 +84,6 @@ class RecallInstruments(Extension):
         4. Sort by priority
         5. Format and inject into prompt
         """
-        set = settings.get_settings()
         extras = loop_data.extras_persistent
         
         # Cleanup previous instruments from extras
@@ -131,8 +130,8 @@ class RecallInstruments(Extension):
         try:
             instruments = await db.search_similarity_threshold(
                 query=query,
-                limit=set.get("instrument_recall_max_search", 8),
-                threshold=set.get("instrument_recall_similarity_threshold", 0.4),
+                limit=merged_settings.get("instrument_recall_max_search", 8),
+                threshold=merged_settings.get("instrument_recall_similarity_threshold", 0.4),
                 filter=profile_filter,
             )
         except Exception as e:
@@ -177,7 +176,7 @@ class RecallInstruments(Extension):
         )
         
         # Limit to max results
-        max_result = set.get("instrument_recall_max_result", 3)
+        max_result = merged_settings.get("instrument_recall_max_result", 3)
         instruments_sorted = instruments_sorted[:max_result]
         
         # Update log with results
