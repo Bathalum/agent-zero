@@ -33,6 +33,7 @@ services:
       - ./agents:/a0/agents
       - ./prompts:/a0/prompts
       - ./webui:/a0/webui
+      - ./conf:/a0/conf
       - ./run_ui.py:/a0/run_ui.py
       - ./run_tunnel.py:/a0/run_tunnel.py
       - ./agent.py:/a0/agent.py

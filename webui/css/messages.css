@@ -10,10 +10,12 @@
   overflow-x: hidden;
   scroll-behavior: auto !important; /* avoid infinite scrolling! */
   padding: var(--spacing-md) var(--spacing-sm) 0;
+  padding-bottom: 200px; /* Add bottom padding so content isn't hidden behind input */
   -webkit-transition: all 0.3s ease;
   transition: all 0.3s ease;
   scrollbar-width: thin;
   scrollbar-color: #555 transparent;
+  min-height: 0; /* Allow it to shrink in flex container */
 }
 
 #chat-history > *:first-child {

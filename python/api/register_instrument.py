@@ -93,12 +93,27 @@ class RegisterInstrument(ApiHandler):
                 }
             
             # Parse webhook URL
-            if "/webhook/" in webhook_url:
-                parts = webhook_url.split("/webhook/")
-                base_url = parts[0]
-                webhook_path = "/webhook/" + parts[1]
-                config["n8n_base_url"] = base_url
+            if webhook_url.startswith("http"):
+                # Full URL provided - extract base and path
+                if "/webhook/" in webhook_url:
+                    idx = webhook_url.find("/webhook/")
+                    base_url = webhook_url[:idx]
+                    webhook_path = webhook_url[idx:]
+                    config["n8n_base_url"] = base_url
+                elif "/webhook-test/" in webhook_url:
+                    # Handle test webhooks
+                    idx = webhook_url.find("/webhook-test/")
+                    base_url = webhook_url[:idx]
+                    webhook_path = webhook_url[idx:]
+                    config["n8n_base_url"] = base_url
+                else:
+                    return Response(
+                        '{"error": "Webhook URL must contain \'/webhook/\' or \'/webhook-test/\' path"}',
+                        status=400,
+                        mimetype="application/json"
+                    )
             else:
+                # Just path provided - use existing base URL
                 webhook_path = webhook_url if webhook_url.startswith("/") else f"/{webhook_url}"
             
             # Add workflow to config
@@ -170,7 +185,7 @@ python /a0/instruments/custom/n8n/bridge.py {workflow_name}{example_params}
             # Get context for memory reload
             ctxid = input.get("context_id", "")
             if ctxid:
-                context = self.get_context(ctxid)
+                context = self.use_context(ctxid)
                 # Reload memory to embed new instrument
                 await memory.Memory.reload(context.agent0)
                 context.log.set_initial_progress()

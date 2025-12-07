@@ -6,13 +6,15 @@ Subscribes to log updates and converts them to AG-UI events for distribution.
 
 import asyncio
 import threading
-from typing import Dict, Optional, Set
+from typing import Dict, Optional, Set, TYPE_CHECKING
 from collections import defaultdict
 
 from agent import AgentContext
 from python.agui.connection_manager import ConnectionManager
 from python.agui.adapter import ResponseAdapter, AGUIEvent
-from python.agui.server import AGUIServer
+
+if TYPE_CHECKING:
+    from python.agui.server import AGUIServer
 
 
 class LogBridge:
@@ -25,7 +27,7 @@ class LogBridge:
     _instance: Optional["LogBridge"] = None
     _lock = threading.RLock()
     
-    def __init__(self, server: Optional[AGUIServer] = None):
+    def __init__(self, server: Optional["AGUIServer"] = None):
         self.server = server
         # context_id -> last_log_version
         self._last_versions: Dict[str, int] = {}
@@ -43,7 +45,7 @@ class LogBridge:
                     cls._instance = cls()
         return cls._instance
     
-    def set_server(self, server: AGUIServer):
+    def set_server(self, server: "AGUIServer"):
         """Set the AG-UI server instance for event distribution."""
         self.server = server
     

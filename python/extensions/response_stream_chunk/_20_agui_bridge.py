@@ -6,9 +6,6 @@ Bridges response stream chunks to AG-UI events for real-time streaming.
 
 from python.helpers.extension import Extension
 from agent import LoopData
-from python.agui.server import AGUIServer
-from python.agui.adapter import ResponseAdapter
-from python.agui.config import AGUIConfig
 
 
 class AGUIBridge(Extension):
@@ -17,12 +14,21 @@ class AGUIBridge(Extension):
     
     Converts response stream chunks to AG-UI events and broadcasts them
     to connected clients.
+    
+    Uses lazy imports to avoid loading AG-UI modules when not needed,
+    keeping this extension modular and preventing circular import issues.
     """
     
     async def execute(self, loop_data: LoopData = LoopData(), **kwargs):
         """Process stream chunk and broadcast to AG-UI clients."""
-        # Check if AG-UI is enabled
-        if not AGUIConfig.is_enabled():
+        # Lazy import - only load AG-UI modules when needed
+        try:
+            from python.agui.config import AGUIConfig
+            # Check if AG-UI is enabled before importing other modules
+            if not AGUIConfig.is_enabled():
+                return
+        except ImportError:
+            # AG-UI not available, fail silently
             return
         
         stream_data = kwargs.get("stream_data")
@@ -31,6 +37,14 @@ class AGUIBridge(Extension):
         
         agent = kwargs.get("agent")
         if not agent or not agent.context:
+            return
+        
+        # Only import these if AG-UI is enabled
+        try:
+            from python.agui.server import AGUIServer
+            from python.agui.adapter import ResponseAdapter
+        except ImportError:
+            # AG-UI modules not available, fail silently
             return
         
         context_id = agent.context.id

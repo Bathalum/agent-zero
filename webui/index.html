@@ -161,7 +161,7 @@
             <div x-data x-show="$store.welcomeStore && $store.welcomeStore.isVisible">
                 <x-component path="welcome/welcome-screen.html"></x-component>
             </div>
-            </div>
+            
             <!-- Message History (actual messages) -->
             <div id="chat-history" x-data x-show="!$store.welcomeStore || !$store.welcomeStore.isVisible"></div>
 
@@ -179,8 +179,8 @@
                 <button class="toast__copy" style="display: none;">Copy</button>
                 <button class="toast__close">Close</button>
             </div>
-            <!-- Chat Input Area -->
-            <div x-show="!$store.welcomeStore || !$store.welcomeStore.isVisible">
+            <!-- Chat Input Area - Must be at bottom -->
+            <div id="chat-input-wrapper" x-show="!$store.welcomeStore || !$store.welcomeStore.isVisible">
                 <!-- Progress Bar -->
                 <x-component path="chat/input/progress.html"></x-component>
                 <!-- Input Section -->

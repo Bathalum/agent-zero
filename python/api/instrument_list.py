@@ -2,6 +2,7 @@ from python.helpers.api import ApiHandler, Request, Response
 from python.helpers.instrument_metadata import InstrumentMetadata
 from python.helpers import files
 import os
+import json
 
 
 class InstrumentList(ApiHandler):
@@ -94,6 +95,29 @@ class InstrumentList(ApiHandler):
                 else:
                     # Generate from ID
                     enriched["display_name"] = inst.get("id", "").replace("_", " ").replace(".", " ").title()
+                
+                # For n8n instruments, add webhook URL information
+                if inst.get("type") == "n8n":
+                    try:
+                        # Extract workflow name from instrument_id (e.g., "n8n.slack_message" -> "slack_message")
+                        workflow_name = inst.get("id", "").split(".", 1)[1] if "." in inst.get("id", "") else ""
+                        if workflow_name:
+                            config_path = files.get_abs_path("instruments/custom/n8n/config.json")
+                            if os.path.exists(config_path):
+                                with open(config_path, 'r') as f:
+                                    n8n_config = json.load(f)
+                                
+                                workflow_config = n8n_config.get("workflows", {}).get(workflow_name, {})
+                                base_url = n8n_config.get("n8n_base_url", "")
+                                webhook_path = workflow_config.get("webhook_path", "")
+                                
+                                if base_url and webhook_path:
+                                    enriched["webhook_url"] = f"{base_url}{webhook_path}"
+                                    enriched["webhook_path"] = webhook_path
+                                    enriched["n8n_base_url"] = base_url
+                    except Exception:
+                        # Silently fail if we can't read webhook info
+                        pass
                 
                 enriched_instruments.append(enriched)
             

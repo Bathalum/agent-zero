@@ -126,6 +126,14 @@
                     <!-- Description -->
                     <p style="margin: 0 0 15px 0; color: #aaa; font-size: 14px;" x-text="instrument.description || 'No description available'"></p>
 
+                    <!-- Webhook URL (for n8n instruments) -->
+                    <template x-if="instrument.type === 'n8n' && instrument.webhook_url">
+                        <div style="margin-bottom: 15px; padding: 10px; background: #1a1a2a; border: 1px solid #333; border-radius: 4px;">
+                            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">Webhook URL:</div>
+                            <div style="font-size: 12px; color: #8af; word-break: break-all; font-family: monospace;" x-text="instrument.webhook_url"></div>
+                        </div>
+                    </template>
+
                     <!-- Metadata -->
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                         <!-- Profiles -->

@@ -67,11 +67,27 @@ const model = {
             const newEnabledState = !instrument.enabled;
 
             try {
+                // Get API key from settings
+                let apiKey = '';
+                try {
+                    if (typeof settingsModalProxy !== 'undefined' && settingsModalProxy.settings) {
+                        const allFields = settingsModalProxy.settings.sections.flatMap(s => s.fields || []);
+                        const tokenField = allFields.find(f => f.id === 'mcp_server_token');
+                        apiKey = tokenField ? tokenField.value : '';
+                    }
+                } catch (e) {
+                    console.warn('Could not get API key from settings:', e);
+                }
+
+                if (!apiKey) {
+                    throw new Error('API key not found. Please check your MCP Server Token in Settings.');
+                }
+
                 const response = await fetch('/api/instrument_update', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': localStorage.getItem('a0_api_key') || '',
+                        'X-API-KEY': apiKey,
                     },
                     body: JSON.stringify({
                         instrument_id: instrument.id,
@@ -127,6 +143,19 @@ const model = {
 
             if (newPriority === null) return; // User cancelled
 
+            // For n8n instruments, also prompt for webhook URL
+            if (instrument.type === 'n8n' && instrument.webhook_url) {
+                const newWebhookUrl = prompt(
+                    `Edit webhook URL for ${instrument.display_name || instrument.id}\nEnter full webhook URL or just the path:`,
+                    instrument.webhook_url
+                );
+
+                if (newWebhookUrl !== null && newWebhookUrl.trim() !== instrument.webhook_url) {
+                    // Update webhook URL separately
+                    this.updateWebhookUrl(instrument.id, newWebhookUrl.trim());
+                }
+            }
+
             this.updateInstrument(instrument.id, {
                 profiles: newProfiles.split(',').map(p => p.trim()).filter(p => p),
                 tags: newTags.split(',').map(t => t.trim()).filter(t => t),
@@ -134,13 +163,79 @@ const model = {
             });
         },
 
+        async updateWebhookUrl(instrumentId, webhookUrl) {
+            try {
+                // Get API key from settings
+                let apiKey = '';
+                try {
+                    if (typeof settingsModalProxy !== 'undefined' && settingsModalProxy.settings) {
+                        const allFields = settingsModalProxy.settings.sections.flatMap(s => s.fields || []);
+                        const tokenField = allFields.find(f => f.id === 'mcp_server_token');
+                        apiKey = tokenField ? tokenField.value : '';
+                    }
+                } catch (e) {
+                    console.warn('Could not get API key from settings:', e);
+                }
+
+                if (!apiKey) {
+                    throw new Error('API key not found. Please check your MCP Server Token in Settings.');
+                }
+
+                const response = await fetch('/api/update_instrument_webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-KEY': apiKey,
+                    },
+                    body: JSON.stringify({
+                        instrument_id: instrumentId,
+                        webhook_url: webhookUrl,
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.showNotification('Webhook URL updated successfully');
+                    // Reload instruments to get updated webhook URL
+                    await this.loadInstruments();
+                } else {
+                    throw new Error(data.error || 'Failed to update webhook URL');
+                }
+            } catch (error) {
+                console.error('Error updating webhook URL:', error);
+                this.error = error.message;
+                this.showNotification(`Error: ${error.message}`, 'error');
+            }
+        },
+
         async updateInstrument(instrumentId, updates) {
             try {
+                // Get API key from settings
+                let apiKey = '';
+                try {
+                    if (typeof settingsModalProxy !== 'undefined' && settingsModalProxy.settings) {
+                        const allFields = settingsModalProxy.settings.sections.flatMap(s => s.fields || []);
+                        const tokenField = allFields.find(f => f.id === 'mcp_server_token');
+                        apiKey = tokenField ? tokenField.value : '';
+                    }
+                } catch (e) {
+                    console.warn('Could not get API key from settings:', e);
+                }
+
+                if (!apiKey) {
+                    throw new Error('API key not found. Please check your MCP Server Token in Settings.');
+                }
+
                 const response = await fetch('/api/instrument_update', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': localStorage.getItem('a0_api_key') || '',
+                        'X-API-KEY': apiKey,
                     },
                     body: JSON.stringify({
                         instrument_id: instrumentId,
@@ -166,24 +261,30 @@ const model = {
             }
         },
 
-        showNotification(message) {
+        showNotification(message, type = 'success') {
             // Simple notification - in production, use a proper notification system
             console.log('Notification:', message);
             
             // Create a temporary notification element
             const notification = document.createElement('div');
             notification.textContent = message;
+            
+            const bgColor = type === 'error' ? '#4a2a2a' : '#2a4a2a';
+            const textColor = type === 'error' ? '#f88' : '#8f8';
+            const borderColor = type === 'error' ? '#a44' : '#4a4';
+            
             notification.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
                 padding: 15px 20px;
-                background: #2a4a2a;
-                color: #8f8;
-                border: 1px solid #4a4;
+                background: ${bgColor};
+                color: ${textColor};
+                border: 1px solid ${borderColor};
                 border-radius: 4px;
                 z-index: 10000;
                 animation: slideIn 0.3s ease-out;
+                max-width: 400px;
             `;
             document.body.appendChild(notification);
 

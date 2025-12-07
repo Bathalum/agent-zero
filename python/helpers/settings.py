@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from typing import Any, Literal, TypedDict, cast
 
 import models
@@ -589,7 +590,12 @@ def convert_out(settings: Settings) -> SettingsOutput:
     # Collect unique providers from both chat and embedding sections
     providers_seen: set[str] = set()
     for p_type in ("chat", "embedding"):
-        for provider in get_providers(p_type):
+        providers = get_providers(p_type)
+        if not providers:
+            # Log warning if no providers found (but continue to allow manual .env configuration)
+            import logging
+            logging.warning(f"No providers found for type '{p_type}'. Check conf/model_providers.yaml")
+        for provider in providers:
             pid_lower = provider["value"].lower()
             if pid_lower in providers_seen:
                 continue
@@ -1392,10 +1398,12 @@ def convert_out(settings: Settings) -> SettingsOutput:
 
 
 def _get_api_key_field(settings: Settings, provider: str, title: str) -> SettingsField:
-    key = settings["api_keys"].get(provider, models.get_api_key(provider))
+    # API keys are stored with the "api_key_" prefix in settings["api_keys"]
+    field_id = f"api_key_{provider}"
+    key = settings["api_keys"].get(field_id) or models.get_api_key(provider)
     # For API keys, use simple asterisk placeholder for existing keys
     return {
-        "id": f"api_key_{provider}",
+        "id": field_id,
         "title": title,
         "type": "text",
         "value": (API_KEY_PLACEHOLDER if key and key != "None" else ""),

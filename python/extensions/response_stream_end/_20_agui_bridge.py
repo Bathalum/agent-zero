@@ -6,9 +6,6 @@ Finalizes response streams and sends completion events to AG-UI clients.
 
 from python.helpers.extension import Extension
 from agent import LoopData
-from python.agui.server import AGUIServer
-from python.agui.adapter import ResponseAdapter
-from python.agui.config import AGUIConfig
 
 
 class AGUIBridgeEnd(Extension):
@@ -17,16 +14,33 @@ class AGUIBridgeEnd(Extension):
     
     Sends stream end events to connected AG-UI clients when response
     streaming is complete.
+    
+    Uses lazy imports to avoid loading AG-UI modules when not needed,
+    keeping this extension modular and preventing circular import issues.
     """
     
     async def execute(self, loop_data: LoopData = LoopData(), **kwargs):
         """Process stream end and broadcast completion event."""
-        # Check if AG-UI is enabled
-        if not AGUIConfig.is_enabled():
+        # Lazy import - only load AG-UI modules when needed
+        try:
+            from python.agui.config import AGUIConfig
+            # Check if AG-UI is enabled before importing other modules
+            if not AGUIConfig.is_enabled():
+                return
+        except ImportError:
+            # AG-UI not available, fail silently
             return
         
         agent = kwargs.get("agent")
         if not agent or not agent.context:
+            return
+        
+        # Only import these if AG-UI is enabled
+        try:
+            from python.agui.server import AGUIServer
+            from python.agui.adapter import ResponseAdapter
+        except ImportError:
+            # AG-UI modules not available, fail silently
             return
         
         context_id = agent.context.id
