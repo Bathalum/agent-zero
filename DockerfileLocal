@@ -33,4 +33,4 @@ EXPOSE 22 80 9000-9009
 RUN chmod +x /exe/initialize.sh /exe/run_A0.sh /exe/run_searxng.sh /exe/run_tunnel_api.sh
 
 # initialize runtime and switch to supervisord
-CMD ["/bin/bash", "-c", "/exe/initialize.sh \"$BRANCH\""]
+CMD /bin/bash -c "/exe/initialize.sh \"$BRANCH\""
