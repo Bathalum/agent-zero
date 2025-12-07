@@ -40,3 +40,22 @@ instruments/**
 # Global rule to include .gitkeep files anywhere
 !**/.gitkeep
 agent_history.gif
+
+# Ignore runtime data in agent-zero-data directory
+# Log files (runtime artifacts)
+agent-zero-data/logs/*.html
+agent-zero-data/logs/*.log
+# Keep .gitkeep files
+!agent-zero-data/logs/.gitkeep
+
+# Instrument metadata (runtime registration data)
+agent-zero-data/instruments/metadata.json
+
+# Memory files (runtime data)
+agent-zero-data/memory/**/*
+!agent-zero-data/memory/**/.gitkeep
+
+# Temporary files (runtime data)
+agent-zero-data/tmp/**/*
+!agent-zero-data/tmp/**/.gitkeep
+!agent-zero-data/tmp/secrets.env

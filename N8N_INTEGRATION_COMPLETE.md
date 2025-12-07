@@ -16,7 +16,7 @@ Your Agent Zero instance now has a complete n8n workflow integration system! Her
 ### 2. Your Registered Workflow
 - **Name**: `slack_message`
 - **Description**: Send Slack Message to a specific channel
-- **Webhook**: `https://silveraiautomation.app.n8n.cloud/webhook-test/2cbfd243-09ea-4f58-96e4-e66f82b8ef45`
+- **Webhook**: `https://your-n8n-instance.app.n8n.cloud/webhook-test/your-webhook-uuid-here`
 - **Status**: ✅ Tested and working!
 
 ### 3. Tools Available
@@ -90,10 +90,10 @@ docker restart agent-zero-local
 
 ```json
 {
-  "n8n_base_url": "https://silveraiautomation.app.n8n.cloud",
+  "n8n_base_url": "https://your-n8n-instance.app.n8n.cloud",
   "workflows": {
     "slack_message": {
-      "webhook_path": "/webhook-test/2cbfd243-09ea-4f58-96e4-e66f82b8ef45",
+      "webhook_path": "/webhook-test/your-webhook-uuid-here",
       "description": "Send Slack Message to a specific channel",
       "parameters": ["Message"]
     }

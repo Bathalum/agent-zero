@@ -4,7 +4,7 @@
 $apiToken = "YOUR_API_TOKEN"
 $body = @{
     workflow_name = "slack_message"
-    webhook_url = "https://silveraiautomation.app.n8n.cloud/webhook-test/2cbfd243-09ea-4f58-96e4-e66f82b8ef45"
+    webhook_url = "https://your-n8n-instance.app.n8n.cloud/webhook-test/your-webhook-uuid-here"
     description = "Send Slack Message to a specific channel"
     parameters = @("Message")
 } | ConvertTo-Json
