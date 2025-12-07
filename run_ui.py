@@ -12,6 +12,14 @@ from flask import Flask, request, Response, session, redirect, url_for, render_t
 from werkzeug.wrappers.response import Response as BaseResponse
 import initialize
 from python.helpers import files, git, mcp_server, fasta2a_server
+
+# Try to import AG-UI, handle gracefully if not available
+try:
+    from python.agui.flask_integration import DynamicAGUIProxy
+    AGUI_AVAILABLE = True
+except Exception as e:
+    AGUI_AVAILABLE = False
+    DynamicAGUIProxy = None
 from python.helpers.files import get_abs_path
 from python.helpers import runtime, dotenv, process
 from python.helpers.extract_tools import load_classes_from_folder
@@ -245,11 +253,17 @@ def run():
     for handler in handlers:
         register_api_handler(webapp, handler)
 
-    # add the webapp, mcp, and a2a to the app
+    # add the webapp, mcp, a2a, and agui to the app
     middleware_routes = {
         "/mcp": ASGIMiddleware(app=mcp_server.DynamicMcpProxy.get_instance()),  # type: ignore
         "/a2a": ASGIMiddleware(app=fasta2a_server.DynamicA2AProxy.get_instance()),  # type: ignore
     }
+    
+    # Add AG-UI if available and enabled
+    if AGUI_AVAILABLE and DynamicAGUIProxy:
+        agui_proxy = DynamicAGUIProxy.get_instance()
+        agui_proxy.initialize()
+        middleware_routes["/agui"] = ASGIMiddleware(app=agui_proxy)  # type: ignore
 
     app = DispatcherMiddleware(webapp, middleware_routes)  # type: ignore
 
