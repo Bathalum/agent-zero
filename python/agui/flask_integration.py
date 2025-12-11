@@ -91,8 +91,36 @@ class DynamicAGUIProxy:
             })
             return
         
+        # Strip /agui prefix from path if present (DispatcherMiddleware should strip it, but handle both cases)
+        original_path = scope.get("path", "")
+        _PRINTER.print(f"[AG-UI Proxy] Received request: path={original_path}, type={scope.get('type')}, method={scope.get('method')}")
+        
+        if original_path.startswith("/agui/"):
+            # Create new scope with modified path
+            new_path = original_path[len("/agui"):]
+            _PRINTER.print(f"[AG-UI Proxy] Stripping /agui prefix: {original_path} -> {new_path}")
+            new_scope = {**scope}
+            new_scope["path"] = new_path
+            new_scope["raw_path"] = new_path.encode("utf-8")
+            scope = new_scope
+        elif original_path.startswith("/agui"):
+            # Handle /agui without trailing slash
+            _PRINTER.print(f"[AG-UI Proxy] Handling /agui root: {original_path} -> /")
+            new_scope = {**scope}
+            new_scope["path"] = "/"
+            new_scope["raw_path"] = b"/"
+            scope = new_scope
+        else:
+            _PRINTER.print(f"[AG-UI Proxy] Path doesn't start with /agui, passing through: {original_path}")
+        
         # Route to AG-UI app
-        # The path should already start with /agui/ since this is mounted at /agui
-        # Just forward the scope to the Starlette app
-        await self.app(scope, receive, send)
+        _PRINTER.print(f"[AG-UI Proxy] Forwarding to AG-UI app: path={scope.get('path')}")
+        try:
+            await self.app(scope, receive, send)
+            _PRINTER.print("[AG-UI Proxy] AG-UI app completed")
+        except Exception as e:
+            _PRINTER.warning(f"[AG-UI Proxy] Error in AG-UI app: {e}")
+            import traceback
+            _PRINTER.warning(f"[AG-UI Proxy] Traceback: {traceback.format_exc()}")
+            raise
 

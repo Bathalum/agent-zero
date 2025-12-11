@@ -52,6 +52,69 @@ webapp.config.update(
 
 lock = threading.Lock()
 
+# CORS configuration for microservices architecture
+try:
+    from flask_cors import CORS
+    
+    # Get allowed origins from environment variable
+    # Format: "https://app.vercel.app,https://yourdomain.com"
+    cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+    
+    if cors_origins_env:
+        # Production: Use environment variable
+        allowed_origins = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+    elif runtime.is_development():
+        # Development: Allow local dev servers
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173"
+        ]
+    else:
+        # Production default: Empty (no CORS if not configured)
+        allowed_origins = []
+    
+    if allowed_origins:
+        CORS(webapp,
+             resources={
+                 r"/api/*": {
+                     "origins": allowed_origins,
+                     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                     "allow_headers": ["Content-Type", "X-API-KEY", "X-CSRF-Token"],
+                     "allow_credentials": False,  # Don't allow credentials for API
+                     "max_age": 3600
+                 },
+                 r"/agui/*": {
+                     "origins": allowed_origins,
+                     "methods": ["GET", "POST", "OPTIONS"],
+                     "allow_headers": ["Content-Type", "X-AGUI-Connection", "X-AGUI-Context"],
+                     "allow_credentials": False,  # Don't allow credentials for AG-UI
+                     "max_age": 3600
+                 }
+             })
+        PrintStyle().print(f"CORS enabled for origins: {', '.join(allowed_origins)}")
+    else:
+        PrintStyle().warning("CORS not configured. Set CORS_ALLOWED_ORIGINS environment variable.")
+except ImportError:
+    PrintStyle().warning("flask-cors not installed. CORS disabled. Install with: pip install flask-cors")
+
+@webapp.after_request
+def set_security_headers(response):
+    """Add security headers to all responses"""
+    # Security headers for production
+    if not runtime.is_development():
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    
+    # Always add these headers
+    response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+    
+    return response
+
 # Set up basic authentication for UI and API but not MCP
 # basic_auth = BasicAuth(webapp)
 
@@ -135,6 +198,14 @@ def requires_auth(f):
             return await f(*args, **kwargs)
 
         if session.get('authentication') != user_pass_hash:
+            # Check if this is an API request (external frontend)
+            if request.path.startswith('/api/'):
+                return Response(
+                    '{"error": "Authentication required"}',
+                    status=401,
+                    mimetype='application/json'
+                )
+            # Otherwise redirect to login (for bundled UI)
             return redirect(url_for('login_handler'))
         
         return await f(*args, **kwargs)
@@ -144,6 +215,14 @@ def requires_auth(f):
 def csrf_protect(f):
     @wraps(f)
     async def decorated(*args, **kwargs):
+        # Skip CSRF for API routes with API key (API key is sufficient auth)
+        if request.path.startswith('/api/'):
+            api_key = request.headers.get("X-API-KEY") or (request.json and request.json.get("api_key"))
+            if api_key:
+                # API key authentication bypasses CSRF
+                return await f(*args, **kwargs)
+        
+        # Otherwise enforce CSRF
         token = session.get("csrf_token")
         header = request.headers.get("X-CSRF-Token")
         cookie = request.cookies.get("csrf_token_" + runtime.get_runtime_id())

@@ -67,15 +67,22 @@ class SSETransport(Transport):
         send: Send
     ):
         """Handle an SSE connection lifecycle."""
+        from python.helpers.print_style import PrintStyle
+        debug_printer = PrintStyle(italic=True, font_color="cyan", padding=False)
+        
+        debug_printer.print(f"[SSE Handler] Starting for connection {connection_id}")
         connection = self.connection_manager.get_connection(connection_id)
         if not connection:
+            debug_printer.warning(f"[SSE Handler] Connection {connection_id} not found!")
             return
         
+        debug_printer.print(f"[SSE Handler] Connection found, creating message queue")
         # Create message queue for this connection
         queue = asyncio.Queue()
         self._message_queues[connection_id] = queue
         
         try:
+            debug_printer.print("[SSE Handler] Sending HTTP response start...")
             # Send initial connection event
             await send({
                 'type': 'http.response.start',
@@ -87,13 +94,16 @@ class SSETransport(Transport):
                     (b'x-accel-buffering', b'no'),  # Disable nginx buffering
                 ],
             })
+            debug_printer.print("[SSE Handler] HTTP response start sent successfully")
             
+            debug_printer.print("[SSE Handler] Sending initial connection message...")
             # Send initial connection confirmation
             await self._send_sse_message(send, {
                 "type": "connected",
                 "connection_id": connection_id,
                 "context_id": context_id,
             })
+            debug_printer.print("[SSE Handler] Initial connection message sent")
             
             # Keep-alive task
             last_keepalive = time.time()
@@ -146,37 +156,51 @@ class SSETransport(Transport):
         """Create ASGI application for SSE endpoint."""
         
         async def sse_endpoint(scope: Scope, receive: Receive, send: Send):
+            from python.helpers.print_style import PrintStyle
+            debug_printer = PrintStyle(italic=True, font_color="cyan", padding=False)
+            
+            debug_printer.print(f"[SSE] Endpoint called: type={scope.get('type')}, path={scope.get('path')}")
+            
             if scope["type"] != "http":
+                debug_printer.warning(f"[SSE] Invalid scope type: {scope.get('type')}")
                 return
             
             request = Request(scope, receive)
+            debug_printer.print(f"[SSE] Request created successfully")
             
             # Check if AG-UI is enabled
             if not AGUIConfig.is_enabled():
+                debug_printer.warning("[SSE] AG-UI is disabled")
                 response = Response("AG-UI is disabled", status_code=503)
                 await response(scope, receive, send)
                 return
             
             # Extract context_id from query params or headers
             context_id = request.query_params.get("context_id") or request.headers.get("X-AGUI-Context")
+            debug_printer.print(f"[SSE] context_id: {context_id}")
             
             if not context_id:
+                debug_printer.warning("[SSE] context_id not provided")
                 response = Response("context_id required", status_code=400)
                 await response(scope, receive, send)
                 return
             
             # Register connection
+            debug_printer.print("[SSE] Registering connection...")
             connection = self.connection_manager.register_connection(
                 context_id=context_id,
                 transport_type="sse"
             )
+            debug_printer.print(f"[SSE] Connection registered: {connection.connection_id}")
             
             # Handle the SSE connection
+            debug_printer.print("[SSE] Starting SSE connection handler...")
             await self._handle_sse_connection(
                 connection.connection_id,
                 context_id,
                 send
             )
+            debug_printer.print("[SSE] SSE connection handler completed")
         
         return sse_endpoint
 

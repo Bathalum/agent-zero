@@ -6,6 +6,7 @@ and coordination between transports, adapters, and connections.
 """
 
 import asyncio
+import os
 import threading
 from typing import Dict, Optional, Any
 from starlette.types import ASGIApp, Scope, Receive, Send
@@ -26,6 +27,7 @@ from python.agui.adapter import (
 from python.agui.log_bridge import LogBridge
 from agent import AgentContext, UserMessage
 from python.helpers.print_style import PrintStyle
+from python.helpers import runtime
 
 
 _PRINTER = PrintStyle(italic=True, font_color="cyan", padding=False)
@@ -103,9 +105,8 @@ class AGUIServer:
         
         self._running = True
         
-        # Start log polling task
-        if self._polling_task is None or self._polling_task.done():
-            self._polling_task = asyncio.create_task(self._poll_log_updates())
+        # Note: Polling task will be started lazily when first async context is available
+        # This avoids "no running event loop" errors during synchronous initialization
         
         _PRINTER.print("[AG-UI] Server started")
     
@@ -151,12 +152,25 @@ class AGUIServer:
                 event_dict
             )
     
+    def _ensure_polling_task(self):
+        """Ensure polling task is running (called from async context)."""
+        if self._running and (self._polling_task is None or self._polling_task.done()):
+            try:
+                loop = asyncio.get_running_loop()
+                self._polling_task = loop.create_task(self._poll_log_updates())
+            except RuntimeError:
+                # No running loop, task will be created on next async call
+                pass
+    
     async def handle_incoming_event(
         self,
         connection_id: str,
         event: Dict[str, Any]
     ):
         """Handle an incoming event from a client."""
+        # Ensure polling task is started when we have an async context
+        self._ensure_polling_task()
+        
         event_type = event.get("type")
         context_id = event.get("context_id")
         
@@ -274,14 +288,9 @@ class AGUIServer:
         routes = []
         
         # SSE endpoint (path will be /sse when mounted at /agui)
+        # Note: We can't use Route for ASGI callables that stream, so we'll handle routing manually
         if AGUIConfig.supports_sse():
-            routes.append(
-                Route(
-                    "/sse",
-                    self.sse_transport.create_asgi_app(),
-                    methods=["GET"],
-                )
-            )
+            self._sse_asgi_app = self.sse_transport.create_asgi_app()
         
         # WebSocket endpoint (path will be /ws when mounted at /agui)
         if AGUIConfig.supports_websocket():
@@ -301,8 +310,102 @@ class AGUIServer:
             )
         )
         
+        # Create app with routes
         app = Starlette(routes=routes)
-        return app
+        
+        # Add CORS middleware for AG-UI endpoints (must be added before wrapping)
+        # This is necessary because AG-UI routes are handled by ASGI, not Flask,
+        # so Flask-CORS doesn't apply to them
+        try:
+            from starlette.middleware.cors import CORSMiddleware
+            
+            # Get allowed origins using same logic as Flask-CORS in run_ui.py
+            cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+            
+            if cors_origins_env:
+                # Production: Use environment variable
+                allowed_origins = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+            elif runtime.is_development():
+                # Development: Allow local dev servers
+                allowed_origins = [
+                    "http://localhost:3000",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:5173"
+                ]
+            else:
+                # Production default: Empty (no CORS if not configured)
+                allowed_origins = []
+            
+            if allowed_origins:
+                app.add_middleware(
+                    CORSMiddleware,
+                    allow_origins=allowed_origins,
+                    allow_methods=["GET", "POST", "OPTIONS"],
+                    allow_headers=["Content-Type", "X-AGUI-Connection", "X-AGUI-Context"],
+                    allow_credentials=False,  # Don't allow credentials for AG-UI
+                    max_age=3600
+                )
+                _PRINTER.print(f"[AG-UI] CORS enabled for origins: {', '.join(allowed_origins)}")
+        except ImportError:
+            _PRINTER.warning("[AG-UI] starlette CORS middleware not available. CORS disabled for AG-UI endpoints.")
+        except Exception as e:
+            _PRINTER.warning(f"[AG-UI] Failed to configure CORS: {e}")
+        
+        # Handle SSE routing manually since it's an ASGI callable that streams
+        # We'll intercept requests to /sse and route them to the ASGI app
+        original_app = app
+        
+        async def app_with_sse_routing(scope, receive, send):
+            # Debug logging
+            scope_type = scope.get("type")
+            scope_path = scope.get("path", "")
+            scope_method = scope.get("method", "")
+            _PRINTER.print(f"[AG-UI] Routing: type={scope_type}, path={scope_path}, method={scope_method}")
+            
+            # Ensure polling task starts when app is first used (async context available)
+            self._ensure_polling_task()
+            
+            # Check if this is an SSE request
+            # Path might be "/sse" (after /agui stripped) or "/agui/sse" (if not stripped)
+            is_sse_request = (
+                scope_type == "http" and 
+                scope_method == "GET" and 
+                (scope_path == "/sse" or scope_path.endswith("/sse"))
+            )
+            
+            if is_sse_request:
+                _PRINTER.print(f"[AG-UI] Detected SSE request, routing to SSE handler")
+                # Route to SSE ASGI app
+                if hasattr(self, '_sse_asgi_app'):
+                    try:
+                        _PRINTER.print(f"[AG-UI] Calling SSE ASGI app")
+                        await self._sse_asgi_app(scope, receive, send)
+                        _PRINTER.print(f"[AG-UI] SSE ASGI app completed")
+                        return
+                    except Exception as e:
+                        _PRINTER.warning(f"[AG-UI] Error in SSE handler: {e}")
+                        import traceback
+                        _PRINTER.warning(f"[AG-UI] Traceback: {traceback.format_exc()}")
+                        response = Response(f"SSE error: {str(e)}", status_code=500)
+                        await response(scope, receive, send)
+                        return
+                else:
+                    _PRINTER.warning(f"[AG-UI] SSE ASGI app not found!")
+            else:
+                _PRINTER.print(f"[AG-UI] Not SSE request, routing to Starlette app")
+            
+            # Otherwise, route to normal Starlette app
+            try:
+                await original_app(scope, receive, send)
+            except Exception as e:
+                _PRINTER.warning(f"[AG-UI] Error in Starlette app: {e}")
+                import traceback
+                _PRINTER.warning(f"[AG-UI] Traceback: {traceback.format_exc()}")
+                response = Response(f"App error: {str(e)}", status_code=500)
+                await response(scope, receive, send)
+        
+        return app_with_sse_routing
     
     async def _handle_events_endpoint(
         self,
