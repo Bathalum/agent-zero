@@ -146,14 +146,83 @@ class ResponseAdapter:
         message_id: Optional[str] = None
     ) -> AGUIEvent:
         """Convert error to AG-UI event."""
-        return AGUIEvent(
+        # Ensure error is a string and not empty
+        error_str = str(error) if error else "Unknown error occurred"
+        if not error_str.strip():
+            error_str = "Unknown error occurred"
+        
+        # #region agent log
+        import json
+        import os
+        from python.helpers import files
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            log_entry = {
+                "location": "adapter.py:error_to_event",
+                "message": "Creating error event",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "post-fix",
+                "hypothesisId": "F",
+                "data": {
+                    "error_str": error_str,
+                    "context_id": context_id,
+                    "message_id": message_id,
+                    "error_input": str(error) if error else None
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception as e:
+            import sys
+            print(f"[DEBUG LOG ERROR] {e}", file=sys.stderr)
+        # #endregion
+        
+        event = AGUIEvent(
             type="error",
             context_id=context_id,
             data={
-                "error": error,
+                "error": error_str,
                 "message_id": message_id,
             }
         )
+        
+        # #region agent log
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            event_dict = event.to_dict()
+            event_data = event_dict.get("data", {})
+            log_entry = {
+                "location": "adapter.py:error_to_event",
+                "message": "Error event created",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "A",
+                "data": {
+                    "event_dict": event_dict,
+                    "event_data": event_data,
+                    "event_data_keys": list(event_data.keys()) if event_data else [],
+                    "error_value": event_data.get("error", "MISSING"),
+                    "error_value_type": type(event_data.get("error", None)).__name__ if event_data.get("error") else "None",
+                    "error_value_length": len(str(event_data.get("error", ""))) if event_data.get("error") else 0,
+                    "has_error_field": "error" in event_data,
+                    "message_id_value": event_data.get("message_id"),
+                    "full_event_json": json.dumps(event_dict)
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception as e:
+            import sys
+            print(f"[DEBUG LOG ERROR] {e}", file=sys.stderr)
+        # #endregion
+        
+        return event
     
     @staticmethod
     def progress_to_event(

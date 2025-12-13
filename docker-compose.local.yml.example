@@ -1,0 +1,43 @@
+# Example docker-compose.local.yml
+# Copy this to docker-compose.local.yml and set your environment variables
+
+version: '3.8'
+
+services:
+  # Portal Backend (Flask API)
+  portal-backend:
+    container_name: portal-backend-local
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    ports:
+      - "${PORTAL_PORT:-5000}:5000"
+    environment:
+      - TZ=UTC
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      - FLASK_DEBUG=${FLASK_DEBUG:-False}
+      - PORT=5000
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero-local:80}
+      - AGENT_ZERO_REQUEST_TIMEOUT=${AGENT_ZERO_REQUEST_TIMEOUT:-10}
+    volumes:
+      - ./app:/app/app
+      - ./migrations:/app/migrations
+    restart: unless-stopped
+    depends_on:
+      - agent-zero-local
+    networks:
+      - agent-zero-network
+
+  # Agent Zero Backend
+  agent-zero-local:
+    # ... (same as existing)
+
+# Network for service communication
+networks:
+  agent-zero-network:
+    driver: bridge

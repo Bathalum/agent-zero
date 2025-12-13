@@ -2,22 +2,25 @@
 
 Welcome! This kit contains everything you need to integrate AG-UI into your frontend application.
 
+**IMPORTANT: Read [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md) first** - This establishes the contract where the backend (Port) defines the protocol and frontend (Adaptor) must conform to backend specifications.
+
 ## 📦 What's Included
 
 This integration kit contains:
 
-1. **[README.md](./README.md)** - Overview and navigation
-2. **[QUICK_START.md](./QUICK_START.md)** - Get started in 5 minutes ⚡
-3. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete server setup guide (Docker, Production, CORS) ⭐ **START HERE FOR SETUP**
-4. **[API_REFERENCE.md](./API_REFERENCE.md)** - Complete API documentation
-5. **[PROTOCOL.md](./PROTOCOL.md)** - Protocol specification
-6. **[EXAMPLES.md](./EXAMPLES.md)** - Working code examples
-7. **[CONFIGURATION.md](./CONFIGURATION.md)** - Server configuration reference
-8. **[CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md)** - Context ID management
-9. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues and solutions
-10. **[FAQ.md](./FAQ.md)** - Frequently asked questions
-11. **[INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md)** - Integration checklist
-12. **[SUMMARY.md](./SUMMARY.md)** - Complete kit summary
+1. **[FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md)** - ⭐ **AUTHORITATIVE CONTRACT** - Backend as Port, Frontend as Adaptor
+2. **[README.md](./README.md)** - Overview and navigation
+3. **[QUICK_START.md](./QUICK_START.md)** - Get started in 5 minutes ⚡
+4. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete server setup guide (Docker, Production, CORS) - Part of backend contract
+5. **[PROTOCOL.md](./PROTOCOL.md)** - Protocol specification - Part of backend contract
+6. **[API_REFERENCE.md](./API_REFERENCE.md)** - Complete API documentation
+7. **[EXAMPLES.md](./EXAMPLES.md)** - Working code examples
+8. **[CONFIGURATION.md](./CONFIGURATION.md)** - Server configuration reference
+9. **[CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md)** - Context ID management
+10. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues and solutions
+11. **[FAQ.md](./FAQ.md)** - Frequently asked questions
+12. **[INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md)** - Integration checklist
+13. **[SUMMARY.md](./SUMMARY.md)** - Complete kit summary
 
 ## 🎯 Quick Paths
 
@@ -94,17 +97,19 @@ Agent Processing & Responses
 ## 📚 Reading Order
 
 **For LLMs/AI Builders:**
-1. Start with [QUICK_START.md](./QUICK_START.md)
-2. Reference [API_REFERENCE.md](./API_REFERENCE.md) as needed
-3. Use [EXAMPLES.md](./EXAMPLES.md) for code patterns
-4. Check [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) if stuck
+1. **Start with [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md)** - Understand the contract: Backend as Port, Frontend as Adaptor
+2. Read [QUICK_START.md](./QUICK_START.md) to get started
+3. Reference [API_REFERENCE.md](./API_REFERENCE.md) as needed
+4. Use [EXAMPLES.md](./EXAMPLES.md) for code patterns
+5. Check [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) if stuck
 
 **For Developers:**
-1. Read [README.md](./README.md) for overview
-2. Follow [QUICK_START.md](./QUICK_START.md) to get running
-3. Study [EXAMPLES.md](./EXAMPLES.md) for your framework
-4. Keep [API_REFERENCE.md](./API_REFERENCE.md) handy
-5. Use [INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md) before production
+1. **Read [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md)** - Understand backend requirements and frontend obligations
+2. Read [README.md](./README.md) for overview
+3. Follow [QUICK_START.md](./QUICK_START.md) to get running
+4. Study [EXAMPLES.md](./EXAMPLES.md) for your framework
+5. Keep [API_REFERENCE.md](./API_REFERENCE.md) handy
+6. Use [INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md) before production
 
 ## 🔑 Key Concepts
 

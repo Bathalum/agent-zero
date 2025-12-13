@@ -42,29 +42,248 @@ class SSETransport(Transport):
     
     async def send_event(self, connection_id: str, event: Dict[str, Any]) -> bool:
         """Send an event via SSE."""
+        # #region agent log
+        import json
+        import os
+        from python.helpers import files
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            log_entry = {
+                "location": "transport.py:send_event",
+                "message": "send_event called",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "D",
+                "data": {
+                    "connection_id": connection_id,
+                    "has_queue": connection_id in self._message_queues,
+                    "queue_count": len(self._message_queues),
+                    "event_type": event.get("type", "unknown")
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception:
+            pass
+        # #endregion
+        
         if connection_id in self._message_queues:
             try:
                 await self._message_queues[connection_id].put(event)
+                
+                # #region agent log
+                try:
+                    log_entry = {
+                        "location": "transport.py:send_event",
+                        "message": "Event put in queue successfully",
+                        "timestamp": int(__import__("time").time() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "D",
+                        "data": {
+                            "connection_id": connection_id,
+                            "queue_size": self._message_queues[connection_id].qsize()
+                        }
+                    }
+                    log_line = json.dumps(log_entry) + "\n"
+                    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                        f.write(log_line)
+                except Exception:
+                    pass
+                # #endregion
+                
                 return True
-            except Exception:
+            except Exception as e:
+                # #region agent log
+                try:
+                    log_entry = {
+                        "location": "transport.py:send_event",
+                        "message": "Exception putting event in queue",
+                        "timestamp": int(__import__("time").time() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "D",
+                        "data": {
+                            "connection_id": connection_id,
+                            "error": str(e),
+                            "error_type": type(e).__name__
+                        }
+                    }
+                    log_line = json.dumps(log_entry) + "\n"
+                    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                        f.write(log_line)
+                except Exception:
+                    pass
+                # #endregion
                 return False
+        
+        # #region agent log
+        try:
+            log_entry = {
+                "location": "transport.py:send_event",
+                "message": "No queue found for connection",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "D",
+                "data": {
+                    "connection_id": connection_id,
+                    "available_queues": list(self._message_queues.keys())
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception:
+            pass
+        # #endregion
+        
         return False
     
     async def broadcast_to_context(self, context_id: str, event: Dict[str, Any]) -> int:
         """Broadcast event to all SSE connections in a context."""
+        # #region agent log
+        import json
+        import os
+        from python.helpers import files
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            log_entry = {
+                "location": "transport.py:broadcast_to_context",
+                "message": "SSE broadcast_to_context called",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "post-fix",
+                "hypothesisId": "C",
+                "data": {
+                    "context_id": context_id,
+                    "event_type": event.get("type", "unknown")
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception as e:
+            import sys
+            print(f"[DEBUG LOG ERROR] {e}", file=sys.stderr)
+        # #endregion
+        
         connections = self.connection_manager.get_connections(context_id)
+        
+        # #region agent log
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            log_entry = {
+                "location": "transport.py:broadcast_to_context",
+                "message": "Found connections for context",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "post-fix",
+                "hypothesisId": "C",
+                "data": {
+                    "context_id": context_id,
+                    "total_connections": len(connections),
+                    "sse_connections": len([c for c in connections if c.transport_type == "sse" and not c.closed]),
+                    "connection_ids": [c.connection_id for c in connections if c.transport_type == "sse" and not c.closed]
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception:
+            pass
+        # #endregion
+        
         count = 0
         for conn in connections:
             if conn.transport_type == "sse" and not conn.closed:
-                if await self.send_event(conn.connection_id, event):
+                # #region agent log
+                try:
+                    DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+                    os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+                    log_entry = {
+                        "location": "transport.py:broadcast_to_context",
+                        "message": "Attempting to send_event to connection",
+                        "timestamp": int(__import__("time").time() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "post-fix",
+                        "hypothesisId": "D",
+                        "data": {
+                            "connection_id": conn.connection_id,
+                            "has_queue": conn.connection_id in self._message_queues
+                        }
+                    }
+                    log_line = json.dumps(log_entry) + "\n"
+                    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                        f.write(log_line)
+                except Exception:
+                    pass
+                # #endregion
+                
+                result = await self.send_event(conn.connection_id, event)
+                
+                # #region agent log
+                try:
+                    DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+                    os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+                    log_entry = {
+                        "location": "transport.py:broadcast_to_context",
+                        "message": "send_event result",
+                        "timestamp": int(__import__("time").time() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "post-fix",
+                        "hypothesisId": "D",
+                        "data": {
+                            "connection_id": conn.connection_id,
+                            "success": result
+                        }
+                    }
+                    log_line = json.dumps(log_entry) + "\n"
+                    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                        f.write(log_line)
+                except Exception:
+                    pass
+                # #endregion
+                
+                if result:
                     count += 1
+        
+        # #region agent log
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            log_entry = {
+                "location": "transport.py:broadcast_to_context",
+                "message": "broadcast_to_context completed",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "post-fix",
+                "hypothesisId": "C",
+                "data": {
+                    "context_id": context_id,
+                    "events_sent": count
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception:
+            pass
+        # #endregion
+        
         return count
     
     async def _handle_sse_connection(
         self,
         connection_id: str,
         context_id: str,
-        send: Send
+        send: Send,
+        scope: Scope = None
     ):
         """Handle an SSE connection lifecycle."""
         from python.helpers.print_style import PrintStyle
@@ -82,17 +301,61 @@ class SSETransport(Transport):
         self._message_queues[connection_id] = queue
         
         try:
-            debug_printer.print("[SSE Handler] Sending HTTP response start...")
+            # Build base headers
+            headers = [
+                (b'content-type', b'text/event-stream'),
+                (b'cache-control', b'no-cache'),
+                (b'connection', b'keep-alive'),
+                (b'x-accel-buffering', b'no'),  # Disable nginx buffering
+            ]
+            
+            # Add CORS headers manually (since we bypass Starlette CORS middleware)
+            # Use same validation logic as server.py to ensure security consistency
+            import os
+            from python.helpers import runtime
+            
+            # Get origin from request scope
+            origin = None
+            if scope:
+                headers_list = scope.get('headers', [])
+                for header_name, header_value in headers_list:
+                    if header_name.lower() == b'origin':
+                        origin = header_value.decode('utf-8')
+                        break
+            
+            # Determine allowed origins using same logic as Starlette middleware in server.py
+            cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+            if cors_origins_env:
+                # Production: Use environment variable
+                allowed_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+            else:
+                # Development: Auto-allow localhost origins if CORS_ALLOWED_ORIGINS not set
+                # This matches the behavior in server.py CORS middleware
+                # When CORS_ALLOWED_ORIGINS is not set, auto-allow localhost for development
+                allowed_origins = [
+                    "http://localhost:3000",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:5173"
+                ]
+            
+            # Only add CORS headers if origin is in allowed list
+            if allowed_origins and origin and origin in allowed_origins:
+                headers.append((b'access-control-allow-origin', origin.encode('utf-8')))
+                headers.append((b'access-control-allow-methods', b'GET, POST, OPTIONS'))
+                headers.append((b'access-control-allow-headers', b'Content-Type, X-AGUI-Connection, X-AGUI-Context'))
+                headers.append((b'access-control-max-age', b'3600'))
+                debug_printer.print(f"[SSE Handler] CORS headers added: origin={origin}, allowed={len(allowed_origins)} origins")
+            else:
+                debug_printer.print(f"[SSE Handler] CORS headers NOT added - origin={origin}, allowed_origins={'configured' if allowed_origins else 'none'}")
+            
+            debug_printer.print(f"[SSE Handler] Sending HTTP response with {len(headers)} headers")
+            
             # Send initial connection event
             await send({
                 'type': 'http.response.start',
                 'status': 200,
-                'headers': [
-                    (b'content-type', b'text/event-stream'),
-                    (b'cache-control', b'no-cache'),
-                    (b'connection', b'keep-alive'),
-                    (b'x-accel-buffering', b'no'),  # Disable nginx buffering
-                ],
+                'headers': headers,
             })
             debug_printer.print("[SSE Handler] HTTP response start sent successfully")
             
@@ -141,6 +404,38 @@ class SSETransport(Transport):
     
     async def _send_sse_message(self, send: Send, data: Dict[str, Any]):
         """Send a single SSE message."""
+        # #region agent log
+        import os
+        from python.helpers import files
+        try:
+            DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+            os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+            event_data = data.get("data", {})
+            log_entry = {
+                "location": "transport.py:_send_sse_message",
+                "message": "Sending SSE message",
+                "timestamp": int(__import__("time").time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "B",
+                "data": {
+                    "event_type": data.get("type", "unknown"),
+                    "event_data": event_data,
+                    "event_data_keys": list(event_data.keys()) if event_data else [],
+                    "error_value": event_data.get("error", "MISSING") if data.get("type") == "error" else None,
+                    "error_value_type": type(event_data.get("error", None)).__name__ if data.get("type") == "error" and event_data.get("error") else None,
+                    "context_id": data.get("context_id", "unknown"),
+                    "full_data_json": json.dumps(data)
+                }
+            }
+            log_line = json.dumps(log_entry) + "\n"
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception as e:
+            import sys
+            print(f"[DEBUG LOG ERROR] {e}", file=sys.stderr)
+        # #endregion
+        
         try:
             json_str = json.dumps(data)
             message = f"data: {json_str}\n\n"
@@ -149,7 +444,30 @@ class SSETransport(Transport):
                 'body': message.encode('utf-8'),
                 'more_body': True,
             })
-        except Exception:
+        except Exception as e:
+            # #region agent log
+            try:
+                DEBUG_LOG_PATH = files.get_abs_path(".cursor", "debug.log")
+                os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+                log_entry = {
+                    "location": "transport.py:_send_sse_message",
+                    "message": "Exception sending SSE message",
+                    "timestamp": int(__import__("time").time() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "post-fix",
+                    "hypothesisId": "E",
+                    "data": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "event_type": data.get("type", "unknown")
+                    }
+                }
+                log_line = json.dumps(log_entry) + "\n"
+                with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(log_line)
+            except Exception:
+                pass
+            # #endregion
             pass
     
     def create_asgi_app(self) -> ASGIApp:
@@ -198,7 +516,8 @@ class SSETransport(Transport):
             await self._handle_sse_connection(
                 connection.connection_id,
                 context_id,
-                send
+                send,
+                scope
             )
             debug_printer.print("[SSE] SSE connection handler completed")
         

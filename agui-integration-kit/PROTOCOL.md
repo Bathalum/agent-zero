@@ -2,6 +2,8 @@
 
 This document describes the AG-UI protocol specification.
 
+**This protocol specification is part of the [Frontend Contract](./FRONTEND_CONTRACT.md)**. The backend defines these protocol requirements, and frontend implementations must follow them exactly. See [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md) for the complete contract.
+
 ## Protocol Version
 
 Current version: **1.0.0**
@@ -426,4 +428,23 @@ Events with `type: "error"` indicate protocol-level errors. The `data.error` fie
 ## Versioning
 
 Protocol version is included in the server implementation. Future versions may add new event types or modify existing ones while maintaining backward compatibility.
+
+**Contract Guarantee:** Backend maintains backward compatibility within the same MAJOR version. See [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md) for versioning and breaking changes policy.
+
+## Contract Compliance
+
+**Frontend implementations must:**
+- Follow this protocol specification exactly
+- Not extend or modify the protocol
+- Handle all event types (required and optional)
+- Implement error handling as specified
+- Comply with connection lifecycle requirements
+
+**Deviations from this specification may result in:**
+- Compatibility issues
+- Security vulnerabilities
+- Connection failures
+- Unsupported behavior
+
+See [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md) for complete contract requirements and compliance guidelines.
 

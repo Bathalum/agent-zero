@@ -83,6 +83,28 @@ Common issues and solutions for AG-UI integration.
 **Symptoms:**
 - WebSocket connection fails
 - Falls back to SSE
+- Close code 1006 or 1008
+
+**Error Codes:**
+
+**1008 - Policy Violation:**
+- **Close Reason:** `"AG-UI is disabled"` → AG-UI not enabled
+- **Close Reason:** `"context_id required"` → Missing context_id parameter
+- **Solution:**
+  - If disabled: Set `AGUI_ENABLED=true` and recreate container
+  - If missing context_id: Add to URL: `ws://localhost:8080/agui/ws?context_id=test`
+
+**1006 - Abnormal Closure:**
+- Connection closed without proper close frame
+- **Causes:**
+  - Endpoint doesn't exist (wrong path)
+  - Network connection issue
+  - Server crash during connection
+  - Firewall/proxy blocking
+- **Solution:**
+  - Verify endpoint path is `/agui/ws`
+  - Check server logs for errors
+  - Use SSE as fallback: `transport: 'sse'` in client config
 
 **Solutions:**
 
@@ -96,12 +118,32 @@ Common issues and solutions for AG-UI integration.
 2. **Verify WebSocket endpoint:**
    ```bash
    # Test WebSocket endpoint
-   wscat -c ws://localhost:50080/agui/ws?context_id=test
+   wscat -c ws://localhost:8080/agui/ws?context_id=test
+   # Docker: 8080, Native: 50080
    ```
 
-3. **Check proxy/firewall:**
+3. **Check error code in browser:**
+   ```javascript
+   ws.onerror = (error) => {
+     console.log('WebSocket error:', error);
+   };
+   
+   ws.onclose = (event) => {
+     console.log('Close code:', event.code, 'Reason:', event.reason);
+     // 1008 = Policy violation (AG-UI disabled or context_id missing)
+     // 1006 = Abnormal closure (endpoint issue or network problem)
+   };
+   ```
+
+4. **Check proxy/firewall:**
    - Some proxies don't support WebSocket
-   - Use SSE if WebSocket is blocked
+   - Use SSE if WebSocket is blocked: `transport: 'sse'`
+
+5. **Verify AG-UI is enabled:**
+   ```powershell
+   docker exec agent-zero-local printenv AGUI_ENABLED
+   # Should output: true
+   ```
 
 ## Event Issues
 
@@ -464,6 +506,11 @@ environment:
   - AGUI_ENABLED=true
 ```
 
+**Important Notes:**
+1. **Container must be recreated** (not just restarted) after setting environment variable
+2. **Check for .env file override**: If you have a `.env` file mapped into the container (e.g., `./agent-zero-data/.env:/a0/.env`), it may override Docker environment variables. The `.env` file takes precedence when `load_dotenv(override=True)` is called.
+3. **Verify environment variable is set**: Check inside the container to ensure the variable is available
+
 **Then recreate container (required, not just restart):**
 ```powershell
 docker-compose -f docker-compose.local.yml down
@@ -472,11 +519,16 @@ docker-compose -f docker-compose.local.yml up -d
 
 **Verify:**
 ```powershell
+# Check environment variable is set in container
 docker exec agent-zero-local printenv AGUI_ENABLED
 # Should output: true
 
-docker logs agent-zero-local 2>&1 | Select-String -Pattern "AG-UI.*Initialized"
+# Check server logs for initialization message
+docker logs agent-zero-local 2>&1 | Select-String -Pattern "AG-UI"
+# Should see: [AG-UI] Environment check: AGUI_ENABLED=true, is_enabled()=True
 # Should see: [AG-UI] Initialized and ready
+
+# If you see "AGUI_ENABLED=not set" or "is_enabled()=False", the environment variable is not being read correctly
 ```
 
 **Solution for Native/Production:**

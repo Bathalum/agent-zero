@@ -1,0 +1,22 @@
+# Flask Configuration
+FLASK_SECRET_KEY=your-secret-key-here
+FLASK_DEBUG=False
+PORT=5000
+
+# CORS Configuration
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+# Supabase Configuration
+# Project: Argent (ffexjdoutsksyqogqnir)
+SUPABASE_URL=https://ffexjdoutsksyqogqnir.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmZXhqZG91dHNrc3lxb2dxbmlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzNDg1MzAsImV4cCI6MjA4MDkyNDUzMH0.izlYA3qjF70QZ8hJRMA19wqXxwVkd4ZrEzCHM3nQkqI
+
+# Get your service role key from: https://supabase.com/dashboard/project/ffexjdoutsksyqogqnir/settings/api
+# WARNING: Service role key has admin privileges - keep it secret!
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmZXhqZG91dHNrc3lxb2dxbmlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTM0ODUzMCwiZXhwIjoyMDgwOTI0NTMwfQ.hmhxm_Ubp73ZdjkXKa-aD--ylD1oiwewe8KtSVa1F0w
+
+SUPABASE_JWT_SECRET=BLbFNYE/AoWCdY6UPFTyWwNRWO+2wUpCiGjcimWmuoLSOdR0GyPnmuyFEe4fQKVNpKFV/veKR6JJtJ4juznNlw==
+
+# Agent Zero Configuration
+AGENT_ZERO_URL=http://localhost:8080
+AGENT_ZERO_REQUEST_TIMEOUT=10

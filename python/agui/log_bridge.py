@@ -66,7 +66,7 @@ class LogBridge:
             self._last_guids.pop(context_id, None)
             self._seen_log_ids.pop(context_id, None)
     
-    def check_and_broadcast_updates(self, context_id: str) -> bool:
+    async def check_and_broadcast_updates(self, context_id: str) -> bool:
         """
         Check for log updates and broadcast them.
         
@@ -99,7 +99,32 @@ class LogBridge:
                         "log_guid": current_guid,
                     }
                 )
-                self.server.broadcast_event(reset_event)
+                # Schedule broadcast - handle event loop mismatch
+                main_loop = self.server.get_main_event_loop()
+                current_loop = None
+                try:
+                    current_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    pass
+                
+                if main_loop and current_loop and current_loop is not main_loop:
+                    # Cross-thread: use run_coroutine_threadsafe
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.server.broadcast_event(reset_event),
+                        main_loop
+                    )
+                    try:
+                        future.result(timeout=0.1)
+                    except Exception:
+                        pass
+                else:
+                    # Same loop: schedule normally
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(self.server.broadcast_event(reset_event))
+                    except RuntimeError:
+                        # Fallback: await directly if no running loop
+                        await self.server.broadcast_event(reset_event)
                 return True
             
             # Check for new log items
@@ -126,7 +151,32 @@ class LogBridge:
                     if log_item_no >= 0 and log_item_no < len(context.log.logs):
                         log_item = context.log.logs[log_item_no]
                         event = ResponseAdapter.log_item_to_event(log_item, context_id)
-                        self.server.broadcast_event(event)
+                        # Schedule broadcast - handle event loop mismatch
+                        main_loop = self.server.get_main_event_loop()
+                        current_loop = None
+                        try:
+                            current_loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            pass
+                        
+                        if main_loop and current_loop and current_loop is not main_loop:
+                            # Cross-thread: use run_coroutine_threadsafe
+                            future = asyncio.run_coroutine_threadsafe(
+                                self.server.broadcast_event(event),
+                                main_loop
+                            )
+                            try:
+                                future.result(timeout=0.1)
+                            except Exception:
+                                pass
+                        else:
+                            # Same loop: schedule normally
+                            try:
+                                loop = asyncio.get_running_loop()
+                                loop.create_task(self.server.broadcast_event(event))
+                            except RuntimeError:
+                                # Fallback: await directly if no running loop
+                                await self.server.broadcast_event(event)
                 
                 # Update version tracking
                 self._last_versions[context_id] = current_version
@@ -135,7 +185,7 @@ class LogBridge:
         
         return False
     
-    def check_all_contexts(self):
+    async def check_all_contexts(self):
         """Check all subscribed contexts for updates."""
         if not self.server:
             return
@@ -145,5 +195,5 @@ class LogBridge:
         
         for context_id in context_ids:
             self.subscribe_to_context(context_id)  # Ensure subscribed
-            self.check_and_broadcast_updates(context_id)
+            await self.check_and_broadcast_updates(context_id)
 

@@ -338,11 +338,39 @@ def run():
         "/a2a": ASGIMiddleware(app=fasta2a_server.DynamicA2AProxy.get_instance()),  # type: ignore
     }
     
-    # Add AG-UI if available and enabled
+    # Add AG-UI if available (route will return 503 if disabled)
     if AGUI_AVAILABLE and DynamicAGUIProxy:
         agui_proxy = DynamicAGUIProxy.get_instance()
         agui_proxy.initialize()
+        # #region agent log
+        import json
+        DEBUG_LOG_PATH = r"c:\Users\alant\OneDrive\Desktop\Projects\agent-zero\.cursor\debug.log"
+        def _debug_log_middleware(location, message, data=None):
+            try:
+                log_entry = {
+                    "location": location,
+                    "message": message,
+                    "timestamp": int(__import__("time").time() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "D"
+                }
+                if data is not None:
+                    log_entry["data"] = data
+                log_line = json.dumps(log_entry) + "\n"
+                with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(log_line)
+                import sys
+                print(f"[DEBUG MIDDLEWARE] {log_line}", file=sys.stderr, end="")
+            except Exception as e:
+                import sys
+                print(f"[DEBUG LOG ERROR] {e}", file=sys.stderr)
+        _debug_log_middleware("run_ui.py", "Mounting AG-UI route", {"agui_available": AGUI_AVAILABLE, "proxy_exists": DynamicAGUIProxy is not None})
+        # #endregion
         middleware_routes["/agui"] = ASGIMiddleware(app=agui_proxy)  # type: ignore
+        # #region agent log
+        _debug_log_middleware("run_ui.py", "AG-UI route mounted", {"route_path": "/agui"})
+        # #endregion
 
     app = DispatcherMiddleware(webapp, middleware_routes)  # type: ignore
 

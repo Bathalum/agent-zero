@@ -229,15 +229,83 @@ environment:
 The following routes automatically get CORS headers:
 
 - `/api/*` - REST API endpoints (Flask-CORS, requires `X-API-KEY` header)
-- `/agui/*` - AG-UI protocol endpoints (Starlette CORSMiddleware, no API key required)
+- `/agui/*` - AG-UI protocol endpoints (Starlette CORSMiddleware + manual SSE validation, no API key required)
 
 **Important:** AG-UI endpoints (`/agui/*`) have CORS configured at the **ASGI/Starlette level**, not Flask level. This is because AG-UI routes are handled by ASGI middleware, not Flask routes. The CORS middleware is automatically applied when AG-UI is initialized.
 
 **CORS Headers for AG-UI:**
-- `Access-Control-Allow-Origin`: Your frontend origin (or localhost in dev)
+- `Access-Control-Allow-Origin`: Your frontend origin (validated, only if in allowed list)
 - `Access-Control-Allow-Methods`: GET, POST, OPTIONS
 - `Access-Control-Allow-Headers`: Content-Type, X-AGUI-Connection, X-AGUI-Context
 - `Access-Control-Max-Age`: 3600
+
+**Security:** CORS headers are **only** added if the request origin matches the allowed list. Requests from disallowed origins receive no CORS headers and are blocked by browsers.
+
+## Security
+
+### CORS Origin Validation
+
+**All AG-UI endpoints validate request origins for security:**
+
+1. **SSE Endpoint** (`/agui/sse`): 
+   - Manually validates origin (bypasses Starlette middleware due to streaming)
+   - Uses same validation logic as Starlette CORSMiddleware
+   - Only adds CORS headers if origin is in allowed list
+
+2. **WebSocket Endpoint** (`/agui/ws`):
+   - Uses Starlette CORSMiddleware for origin validation
+   - Validates during WebSocket upgrade handshake
+   - Rejects connections from disallowed origins with close code 1008
+
+3. **Events Endpoint** (`/agui/events`):
+   - Uses Starlette CORSMiddleware for origin validation
+   - Validates on each POST request
+   - Returns appropriate error responses for disallowed origins
+
+**Validation Logic (consistent across all endpoints):**
+- Check `CORS_ALLOWED_ORIGINS` environment variable (comma-separated list)
+- If unset and development mode: Allow localhost origins only
+- If unset and production: Empty list (no CORS, all requests rejected)
+- If set: Only allow origins in the list
+- Exact match required (protocol + domain + port)
+
+**Security Best Practices:**
+
+1. **Never use wildcards (`*`)** in production
+   - Allows any origin to connect
+   - Major security vulnerability
+
+2. **Always whitelist specific origins**
+   - Only your frontend domains
+   - Use exact origin match (including protocol and port)
+
+3. **Use HTTPS in production**
+   - Always use `https://` origins
+   - Never allow `http://` origins in production
+
+4. **Validate configuration**
+   - Test that only allowed origins can connect
+   - Verify CORS headers are present for allowed origins
+   - Verify CORS headers are absent for disallowed origins
+
+5. **Monitor CORS rejections**
+   - Check server logs for blocked origin attempts
+   - Investigate unexpected CORS rejections
+
+### Authentication
+
+**Current Status:** AG-UI endpoints do **not** require authentication or API keys.
+
+- No `X-API-KEY` header required (unlike REST API endpoints)
+- No authentication tokens needed
+- Access controlled only through CORS origin validation
+
+**Security Implications:**
+- Any client from an allowed origin can connect
+- Context IDs are user-provided strings (not validated)
+- Consider implementing authentication for production use
+
+**Future Plans:** Authentication support is planned but not yet implemented.
 
 ### Manual Configuration (Advanced)
 

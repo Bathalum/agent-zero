@@ -48,3 +48,7 @@ html2text>=2024.2.26
 beautifulsoup4>=4.12.3
 exchangelib>=5.4.3
 pywinpty==3.0.2; sys_platform == "win32"
+requests>=2.31.0
+supabase>=2.0.0
+PyJWT>=2.8.0
+flask-cors>=4.0.0

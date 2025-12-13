@@ -12,17 +12,27 @@ AG-UI (Agent-User Interface) is a real-time communication protocol that connects
 - **Framework-agnostic** client library
 - **Auto-reconnection** and error handling
 
+## Contract Model: Backend as Port, Frontend as Adaptor
+
+**Important:** This integration follows the Ports and Adaptors (Hexagonal Architecture) pattern:
+
+- **Backend defines the protocol** (Port) - The backend is the **source of truth** for all specifications
+- **Frontend adapts to backend requirements** (Adaptor) - Frontend implementations **must conform** to backend specifications
+
+**See [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md) for the authoritative contract specification.**
+
 ## Quick Navigation
 
-1. **[QUICK_START.md](./QUICK_START.md)** - Get up and running in 5 minutes
-2. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - ⭐ **Complete server setup guide** (Docker, Production, CORS, Verification)
-3. **[API_REFERENCE.md](./API_REFERENCE.md)** - Complete API documentation
-4. **[PROTOCOL.md](./PROTOCOL.md)** - Protocol specification and event types
-5. **[EXAMPLES.md](./EXAMPLES.md)** - Working code examples for React, Vue, Vanilla JS
-6. **[CONFIGURATION.md](./CONFIGURATION.md)** - Server configuration reference
-7. **[CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md)** - Context ID generation and management
-8. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues and solutions
-9. **[INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md)** - Pre-deployment checklist
+1. **[FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md)** - ⭐ **AUTHORITATIVE CONTRACT** - Backend as Port, Frontend as Adaptor
+2. **[QUICK_START.md](./QUICK_START.md)** - Get up and running in 5 minutes
+3. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete server setup guide (Docker, Production, CORS, Verification)
+4. **[PROTOCOL.md](./PROTOCOL.md)** - Protocol specification and event types (backend contract)
+5. **[API_REFERENCE.md](./API_REFERENCE.md)** - Complete API documentation
+6. **[EXAMPLES.md](./EXAMPLES.md)** - Working code examples for React, Vue, Vanilla JS
+7. **[CONFIGURATION.md](./CONFIGURATION.md)** - Server configuration reference
+8. **[CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md)** - Context ID generation and management
+9. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues and solutions
+10. **[INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md)** - Pre-deployment checklist
 
 ## Architecture Overview
 
@@ -130,17 +140,20 @@ Current version: **1.0.0**
 
 ## Next Steps
 
-**For Server Setup:**
-1. **Read [SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete step-by-step server setup guide
+**For Frontend Developers (START HERE):**
+1. **Read [FRONTEND_CONTRACT.md](./FRONTEND_CONTRACT.md)** - Understand the contract: Backend as Port, Frontend as Adaptor
+2. Read [QUICK_START.md](./QUICK_START.md) to get started immediately
+3. Review [EXAMPLES.md](./EXAMPLES.md) for framework-specific code
+4. Reference [API_REFERENCE.md](./API_REFERENCE.md) for detailed API docs
+5. Check [CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md) for context ID guidance
 
-**For Frontend Integration:**
-1. Read [QUICK_START.md](./QUICK_START.md) to get started immediately
-2. Review [EXAMPLES.md](./EXAMPLES.md) for framework-specific code
-3. Reference [API_REFERENCE.md](./API_REFERENCE.md) for detailed API docs
-4. Check [CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md) for context ID guidance
-5. See [FAQ.md](./FAQ.md) for common questions
-6. Check [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) if you encounter issues
-7. Use [INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md) before production deployment
+**For Server Setup:**
+1. **Read [SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete step-by-step server setup guide (part of backend contract)
+
+**Additional Resources:**
+- See [FAQ.md](./FAQ.md) for common questions
+- Check [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) if you encounter issues
+- Use [INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md) before production deployment
 
 ## Support
 
