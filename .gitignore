@@ -1,6 +1,8 @@
 # Ignore common unwanted files globally
 **/.DS_Store
 **/.env
+!**/.env.example
+!**/.env.template
 **/__pycache__/
 *.py[cod]
 **/.conda/
@@ -64,3 +66,9 @@ agent-zero-data/memory/**/*
 agent-zero-data/tmp/**/*
 !agent-zero-data/tmp/**/.gitkeep
 !agent-zero-data/tmp/secrets.env
+
+# Ignore sensitive configuration files
+# Allow example/template files
+agent-zero-data/instruments/custom/n8n/config.json
+!agent-zero-data/instruments/custom/n8n/config.json.example
+Untitled
