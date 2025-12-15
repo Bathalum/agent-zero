@@ -48,6 +48,33 @@ def get_csrf_token(agent_zero_url: str, timeout: int = 10) -> str:
         AgentZeroConnectionError: If unable to connect to Agent Zero
         AgentZeroAuthenticationError: If Agent Zero requires authentication
     """
+    # #region agent log
+    import json
+    import os
+    from datetime import datetime
+    DEBUG_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.cursor', 'debug.log')
+    try:
+        log_entry = {
+            "id": f"log_{int(datetime.now().timestamp() * 1000)}",
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "location": "app/services/agent_zero_client.py:get_csrf_token",
+            "message": "Attempting to connect to Agent Zero",
+            "data": {
+                "agent_zero_url": agent_zero_url,
+                "timeout": timeout,
+                "url_contains_localhost": "localhost" in agent_zero_url.lower()
+            },
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "C"
+        }
+        log_dir = os.path.dirname(DEBUG_LOG_PATH)
+        os.makedirs(log_dir, exist_ok=True)
+        with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(log_entry) + '\n')
+    except Exception:
+        pass
+    # #endregion
     try:
         url = f"{agent_zero_url.rstrip('/')}/csrf_token"
         logger.debug(f"Fetching CSRF token from {url}")
@@ -65,6 +92,30 @@ def get_csrf_token(agent_zero_url: str, timeout: int = 10) -> str:
         return token
         
     except requests.exceptions.ConnectionError as e:
+        # #region agent log
+        try:
+            log_entry = {
+                "id": f"log_{int(datetime.now().timestamp() * 1000)}",
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "location": "app/services/agent_zero_client.py:get_csrf_token",
+                "message": "Connection error to Agent Zero",
+                "data": {
+                    "agent_zero_url": agent_zero_url,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "url_contains_localhost": "localhost" in agent_zero_url.lower()
+                },
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C"
+            }
+            log_dir = os.path.dirname(DEBUG_LOG_PATH)
+            os.makedirs(log_dir, exist_ok=True)
+            with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry) + '\n')
+        except Exception:
+            pass
+        # #endregion
         logger.error(f"Connection error to Agent Zero: {e}")
         raise AgentZeroConnectionError(f"Unable to connect to Agent Zero at {agent_zero_url}") from e
     except requests.exceptions.Timeout as e:
@@ -329,6 +380,111 @@ def extract_api_key(settings_data: dict) -> str:
     except (KeyError, TypeError) as e:
         logger.error(f"Error extracting API key: {e}")
         raise AgentZeroAPIKeyNotFoundError(f"Error extracting API key from settings: {e}") from e
+
+
+def extract_auth_credentials(settings_data: dict) -> Dict[str, Optional[str]]:
+    """
+    Extract auth credentials (username) from Agent Zero settings response.
+    
+    Password is never returned as it's stored as a placeholder in settings.
+    
+    Args:
+        settings_data: Settings data dictionary from get_settings()
+        
+    Returns:
+        Dictionary with 'username' and 'password' keys:
+        {
+            'username': 'admin' or None,  # Actual username if found
+            'password': None               # Always None (placeholder in settings)
+        }
+    """
+    try:
+        settings = settings_data.get('settings', {})
+        sections = settings.get('sections', [])
+        
+        # Find the auth section
+        auth_section = None
+        for section in sections:
+            if section.get('id') == 'auth':
+                auth_section = section
+                break
+        
+        if not auth_section:
+            logger.debug("Auth section not found in settings")
+            return {'username': None, 'password': None}
+        
+        # Find the auth_login field
+        fields = auth_section.get('fields', [])
+        username_field = None
+        for field in fields:
+            if field.get('id') == 'auth_login':
+                username_field = field
+                break
+        
+        username = None
+        if username_field:
+            username = username_field.get('value')
+            if username:
+                username = username.strip()
+                if not username:
+                    username = None
+        
+        # Password is always None - it's stored as placeholder in settings
+        # User must enter password manually
+        logger.debug("Auth credentials extracted successfully")
+        return {
+            'username': username,
+            'password': None
+        }
+        
+    except (KeyError, TypeError) as e:
+        logger.error(f"Error extracting auth credentials: {e}")
+        return {'username': None, 'password': None}
+
+
+def get_initial_agent_zero_credentials(agent_zero_url: str, timeout: int = 10) -> Optional[Dict[str, Optional[str]]]:
+    """
+    Attempt to get initial Agent Zero credentials from settings without authentication.
+    
+    This is a best-effort helper that tries to fetch settings without auth.
+    If Agent Zero requires authentication, this will return None.
+    
+    Args:
+        agent_zero_url: Base URL of Agent Zero backend
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Dictionary with 'username' and 'password' keys, or None if not accessible:
+        {
+            'username': 'admin' or None,
+            'password': None  # Always None, user must enter manually
+        }
+    """
+    try:
+        # Try to get CSRF token without authentication
+        csrf_token = get_csrf_token(agent_zero_url, timeout)
+        
+        # If successful, get settings
+        settings_data = get_settings(agent_zero_url, csrf_token, timeout)
+        
+        # Extract auth credentials
+        credentials = extract_auth_credentials(settings_data)
+        
+        logger.info("Initial credentials retrieved successfully from Agent Zero")
+        return credentials
+        
+    except AgentZeroAuthenticationError:
+        # Agent Zero requires authentication - user must provide credentials manually
+        logger.debug("Agent Zero requires authentication, cannot retrieve initial credentials")
+        return None
+    except (AgentZeroConnectionError, AgentZeroClientError) as e:
+        # Connection or client errors - log but don't raise
+        logger.warning(f"Could not retrieve initial credentials: {e}")
+        return None
+    except Exception as e:
+        # Unexpected errors - log but don't raise (best-effort helper)
+        logger.warning(f"Unexpected error retrieving initial credentials: {e}")
+        return None
 
 
 def authenticate_with_credentials(

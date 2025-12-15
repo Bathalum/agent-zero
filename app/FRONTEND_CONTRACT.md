@@ -7,8 +7,11 @@
 1. [Overview and Architecture](#overview-and-architecture)
 2. [Authentication](#authentication)
 3. [Endpoint Specifications](#endpoint-specifications)
+   - [POST /api/user/initialize-profile](#post-apiuserinitialize-profile)
    - [GET /api/user/agent-zero-status](#get-apiuseragent-zero-status)
+   - [GET /api/user/agent-zero-initial-credentials](#get-apiuseragent-zero-initial-credentials)
    - [GET /api/user/agent-zero-credentials](#get-apiuseragent-zero-credentials)
+   - [PUT /api/user/agent-zero-credentials](#put-apiuseragent-zero-credentials)
    - [POST /api/user/connect-agent-zero](#post-apiuserconnect-agent-zero)
    - [DELETE /api/user/agent-zero-credentials](#delete-apiuseragent-zero-credentials)
    - [POST /api/user/get-agent-zero-api-key](#post-apiuserget-agent-zero-api-key)
@@ -145,6 +148,107 @@ If the JWT token is missing, invalid, or expired, the backend returns:
 ---
 
 ## Endpoint Specifications
+
+### POST /api/user/initialize-profile
+
+Initialize user profile in the Portal Backend database.
+
+#### Purpose
+
+Ensure the authenticated user has a record in the `account_users` table. This solves the chicken-egg problem where users authenticate via Supabase `auth.users` but don't have a corresponding record in `account_users` until they connect to Agent Zero.
+
+#### When to Use
+
+- **On first login**: Call this endpoint after user authenticates to ensure their profile exists
+- **Before Agent Zero operations**: Call this before checking status or connecting to Agent Zero
+- **Profile initialization**: Use when you need to ensure user record exists before other operations
+
+#### Request
+
+**Method**: `POST`
+
+**Headers**:
+```
+Authorization: Bearer <supabase-jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**: None (user info comes from JWT token)
+
+#### Response
+
+**Success (200 OK)**:
+
+```json
+{
+  "success": true,
+  "message": "User profile initialized successfully",
+  "user_id": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Fields**:
+- `success` (boolean): Always `true` on success
+- `message` (string): Success message
+- `user_id` (string): The authenticated user's UUID
+
+**Error - Server Error (500 Internal Server Error)**:
+
+```json
+{
+  "success": false,
+  "message": "Failed to initialize user profile"
+}
+```
+
+#### What Happens Internally
+
+1. Backend extracts user ID and email from JWT token
+2. Checks if user exists in `account_users` table
+3. If user doesn't exist, creates a minimal record with `id` and `email`
+4. Returns success response
+
+#### Side Effects
+
+- Creates `account_users` record if it doesn't exist
+- Idempotent: safe to call multiple times (won't create duplicate records)
+
+#### Usage
+
+**Recommended: Call on app initialization or first login**
+
+```javascript
+// After user authenticates with Supabase
+async function initializeUserProfile() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    const response = await fetch('http://localhost:5000/api/user/initialize-profile', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      console.log('Profile initialized:', data.user_id)
+    }
+  } catch (error) {
+    console.error('Failed to initialize profile:', error)
+  }
+}
+```
+
+#### Important Notes
+
+- **Idempotent**: Safe to call multiple times - won't create duplicate records
+- **Automatic**: User email is extracted from JWT token automatically
+- **Required**: Should be called before Agent Zero operations if user might not exist in `account_users`
+- **Best Practice**: Call this on app initialization or after successful authentication
+
+---
 
 ### GET /api/user/agent-zero-status
 
@@ -646,6 +750,113 @@ The frontend is responsible for:
 
 ---
 
+### GET /api/user/agent-zero-initial-credentials
+
+Get initial Agent Zero credentials from Agent Zero settings (if accessible without authentication).
+
+#### Purpose
+
+Attempt to auto-populate the username field in the connection form by fetching credentials from Agent Zero settings. This solves the chicken-egg problem where users need to know credentials to connect, but credentials are stored in Agent Zero's .env file.
+
+#### When to Use
+
+- **On connection modal open**: Call this endpoint when user opens the "Agent Zero Connection" modal
+- **First-time connection**: Use to auto-fill username field (password must be entered manually)
+- **Best-effort helper**: This endpoint may not work if Agent Zero requires authentication
+
+#### Request
+
+**Method**: `GET`
+
+**Headers**:
+```
+Authorization: Bearer <supabase-jwt-token>
+```
+
+**URL Parameters** (optional):
+- `agent_zero_url` (string, optional): Agent Zero instance URL. Defaults to backend's `AGENT_ZERO_URL` config if not provided.
+
+#### Response
+
+**Success - Credentials Available (200 OK)**:
+
+```json
+{
+  "username": "admin",
+  "password": null,
+  "available": true
+}
+```
+
+**Success - Credentials Not Available (200 OK)**:
+
+```json
+{
+  "username": null,
+  "password": null,
+  "available": false,
+  "message": "Agent Zero requires authentication. Please enter credentials manually."
+}
+```
+
+**Fields**:
+- `username` (string | null): Agent Zero username if available, null otherwise
+- `password` (null): Always null - user must enter password manually for security
+- `available` (boolean): Whether credentials were successfully retrieved
+- `message` (string, optional): Helpful message if credentials not available
+
+#### What Happens Internally
+
+1. Backend attempts to get CSRF token from Agent Zero without authentication
+2. If successful, retrieves settings from Agent Zero
+3. Extracts `auth_login` from the 'auth' section in settings
+4. Returns username (password is never returned - it's stored as placeholder in settings)
+
+#### Security Note
+
+- **Password is NEVER returned**: For security, password is always null. User must enter password manually.
+- **Best-effort endpoint**: If Agent Zero requires authentication, this endpoint returns empty response (not an error)
+- **No sensitive data exposure**: Only username is returned, and only if Agent Zero allows unauthenticated access
+
+#### Usage
+
+**Auto-populate connection form**:
+
+```javascript
+async function loadInitialCredentials() {
+  try {
+    const response = await fetch('http://localhost:5000/api/user/agent-zero-initial-credentials', {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    })
+    
+    const data = await response.json()
+    
+    if (data.available && data.username) {
+      // Auto-fill username field
+      setUsername(data.username)
+      // Password field stays empty - user must enter manually
+    } else {
+      // Credentials not available - user must enter manually
+      console.log(data.message)
+    }
+  } catch (error) {
+    // Non-critical error - user can still enter credentials manually
+    console.error('Could not load initial credentials:', error)
+  }
+}
+```
+
+#### Important Notes
+
+- **Non-blocking**: This endpoint never returns errors - it's a best-effort helper
+- **Password required**: User must always enter password manually
+- **May not work**: If Agent Zero requires authentication, this endpoint returns empty response
+- **Use case**: Primarily for auto-filling username field in connection form
+
+---
+
 ### GET /api/user/agent-zero-credentials
 
 Retrieve stored Agent Zero credentials for the authenticated user.
@@ -720,6 +931,187 @@ Use this endpoint to:
 - Pre-fill connection form when user wants to update credentials
 - Display current connection details
 - Verify stored credentials before attempting connection
+
+---
+
+### PUT /api/user/agent-zero-credentials
+
+Update Agent Zero credentials and automatically retrieve new API key.
+
+#### Purpose
+
+Update both Agent Zero's .env file and Portal Backend stored credentials, then automatically retrieve and store the new API key (which changes when credentials change).
+
+#### When to Use
+
+- **Change credentials**: User wants to update their Agent Zero username and/or password
+- **Security update**: User wants to change credentials for security reasons
+- **Credential rotation**: Regular credential rotation for security best practices
+
+#### Request
+
+**Method**: `PUT`
+
+**Headers**:
+```
+Authorization: Bearer <supabase-jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "username": "newusername",
+  "password": "newpassword",
+  "agent_zero_url": "http://localhost:8080"
+}
+```
+
+**Fields**:
+- `username` (string, required): New Agent Zero username
+- `password` (string, required): New Agent Zero password
+- `agent_zero_url` (string, optional): Agent Zero instance URL. Defaults to backend's `AGENT_ZERO_URL` config or user's stored URL.
+
+#### Response
+
+**Success (200 OK)**:
+
+```json
+{
+  "success": true,
+  "message": "Credentials updated successfully. New API key retrieved.",
+  "api_key": "new_api_key_here"
+}
+```
+
+**Fields**:
+- `success` (boolean): Always `true` on success
+- `message` (string): Success message
+- `api_key` (string): The new API key (MCP Server Token) that was retrieved after credential update
+
+**Error - Validation (400 Bad Request)**:
+
+```json
+{
+  "success": false,
+  "message": "Username and password are required"
+}
+```
+
+**Error - API Key Not Found (404 Not Found)**:
+
+```json
+{
+  "success": false,
+  "message": "Agent Zero API key not found. Please connect to Agent Zero first."
+}
+```
+
+**Error - Authentication Failed (401 Unauthorized)**:
+
+```json
+{
+  "success": false,
+  "message": "Authentication failed with stored API key: [details]. Please reconnect to Agent Zero."
+}
+```
+
+Or:
+
+```json
+{
+  "success": false,
+  "message": "Authentication failed with new credentials: [details]"
+}
+```
+
+**Error - Connection Failed (503 Service Unavailable)**:
+
+```json
+{
+  "success": false,
+  "message": "Unable to connect to Agent Zero. Please ensure it's running."
+}
+```
+
+**Error - Server Error (500 Internal Server Error)**:
+
+```json
+{
+  "success": false,
+  "message": "Failed to update stored credentials"
+}
+```
+
+Or:
+
+```json
+{
+  "success": false,
+  "message": "Failed to store new API key."
+}
+```
+
+#### What Happens Internally
+
+1. **Step 1**: Update Agent Zero's .env file via settings API using stored (old) API key
+   - Sends `auth_login` and `auth_password` to Agent Zero
+   - Agent Zero updates its .env file
+   - Agent Zero regenerates API key (because `create_auth_token()` uses username/password)
+2. **Step 2**: Update Portal Backend stored credentials in database
+3. **Step 3**: Authenticate with Agent Zero using new credentials
+4. **Step 4**: Retrieve new API key from Agent Zero settings
+5. **Step 5**: Store new API key in Portal Backend database
+
+#### Side Effects
+
+- Agent Zero's `.env` file is updated with new AUTH_LOGIN and AUTH_PASSWORD
+- Agent Zero's API key (MCP Server Token) is regenerated
+- Portal Backend stored credentials are updated
+- Portal Backend stored API key is updated
+- Old API key becomes invalid (cannot be used for future requests)
+
+#### Usage
+
+**Update credentials**:
+
+```javascript
+async function updateCredentials(newUsername, newPassword) {
+  try {
+    const response = await fetch('http://localhost:5000/api/user/agent-zero-credentials', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        username: newUsername,
+        password: newPassword
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (data.success) {
+      console.log('Credentials updated successfully')
+      console.log('New API key:', data.api_key)
+      // Optionally show API key to user (with security warning)
+    } else {
+      console.error('Update failed:', data.message)
+    }
+  } catch (error) {
+    console.error('Error updating credentials:', error)
+  }
+}
+```
+
+#### Important Notes
+
+- **API Key Changes**: When credentials are updated, the API key automatically changes. The endpoint handles this transition automatically.
+- **Old API Key Invalid**: After update, the old API key cannot be used. The new API key is returned in the response.
+- **Atomic Operation**: All steps must succeed. If any step fails, the operation is rolled back where possible.
+- **Requires Existing Connection**: User must have connected to Agent Zero before (must have stored API key).
 
 ---
 
@@ -1094,6 +1486,12 @@ class PortalBackendClient {
     return data
   }
 
+  async initializeProfile() {
+    return this.request('/api/user/initialize-profile', {
+      method: 'POST'
+    })
+  }
+
   async getStatus() {
     return this.request('/api/user/agent-zero-status', {
       method: 'GET'
@@ -1126,9 +1524,25 @@ class PortalBackendClient {
     })
   }
 
+  async getInitialCredentials(url = null) {
+    const query = url ? `?agent_zero_url=${encodeURIComponent(url)}` : ''
+    return this.request(`/api/user/agent-zero-initial-credentials${query}`, {
+      method: 'GET'
+    })
+  }
+
   async getCredentials() {
     return this.request('/api/user/agent-zero-credentials', {
       method: 'GET'
+    })
+  }
+
+  async updateCredentials(username, password, url = null) {
+    const body = { username, password }
+    if (url) body.agent_zero_url = url
+    return this.request('/api/user/agent-zero-credentials', {
+      method: 'PUT',
+      body: JSON.stringify(body)
     })
   }
 
@@ -1149,10 +1563,39 @@ const client = new PortalBackendClient(
   }
 )
 
+// Initialize profile (call after authentication)
+try {
+  await client.initializeProfile()
+  console.log('Profile initialized')
+} catch (error) {
+  console.error('Error:', error.message)
+}
+
 // Check status
 try {
   const status = await client.getStatus()
   console.log('Connected:', status.has_api_key)
+} catch (error) {
+  console.error('Error:', error.message)
+}
+
+// Get initial credentials (auto-populate username)
+try {
+  const initial = await client.getInitialCredentials()
+  if (initial.available) {
+    console.log('Username available:', initial.username)
+    // Auto-fill username field in connection form
+  }
+} catch (error) {
+  console.error('Error:', error.message)
+}
+
+// Update credentials
+try {
+  const result = await client.updateCredentials('newuser', 'newpass')
+  if (result.success) {
+    console.log('Credentials updated, new API key:', result.api_key)
+  }
 } catch (error) {
   console.error('Error:', error.message)
 }
@@ -1308,6 +1751,83 @@ class PortalBackendClient {
 ---
 
 ## Common Patterns
+
+### Auto-Populating Connection Form
+
+Fetch initial credentials to pre-fill the username field when opening the connection modal:
+
+```javascript
+async function loadConnectionForm() {
+  try {
+    // Try to get initial credentials from Agent Zero
+    const initial = await client.getInitialCredentials()
+    
+    if (initial.available && initial.username) {
+      // Auto-fill username field
+      setUsername(initial.username)
+      // Password field stays empty - user must enter manually
+    } else {
+      // Credentials not available - user must enter manually
+      // This is normal if Agent Zero requires authentication
+      console.log(initial.message || 'Enter credentials manually')
+    }
+  } catch (error) {
+    // Non-critical error - user can still enter credentials manually
+    console.error('Could not load initial credentials:', error)
+  }
+}
+```
+
+### Updating Agent Zero Credentials
+
+Update credentials and automatically handle API key transition:
+
+```javascript
+async function updateAgentZeroCredentials(newUsername, newPassword) {
+  try {
+    const result = await client.updateCredentials(newUsername, newPassword)
+    
+    if (result.success) {
+      console.log('Credentials updated successfully')
+      console.log('New API key:', result.api_key)
+      
+      // Show success message to user
+      showNotification('Credentials updated successfully', 'success')
+      
+      // Optionally show new API key (with security warning)
+      // Note: API key is also stored automatically, so this is optional
+    } else {
+      showNotification('Failed to update credentials: ' + result.message, 'error')
+    }
+  } catch (error) {
+    showNotification('Error updating credentials: ' + error.message, 'error')
+  }
+}
+```
+
+### Initializing User Profile on Login
+
+Always initialize user profile after authentication:
+
+```javascript
+async function onUserLogin() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return
+
+  // Initialize user profile in Portal Backend
+  try {
+    await client.initializeProfile()
+    console.log('User profile initialized')
+  } catch (error) {
+    console.error('Failed to initialize profile:', error)
+    // Non-critical - user can still use the app
+  }
+
+  // Now safe to check Agent Zero status
+  const status = await client.getStatus()
+  // ...
+}
+```
 
 ### Checking Connection Status Before Operations
 
@@ -1534,6 +2054,14 @@ Use this checklist to verify your frontend implementation:
 - [ ] 401 errors are handled correctly
 - [ ] User is redirected to login when authentication fails
 
+### POST /api/user/initialize-profile
+
+- [ ] Called after user authenticates (on first login)
+- [ ] Called before Agent Zero operations if needed
+- [ ] Handles 500 errors gracefully
+- [ ] Idempotent (safe to call multiple times)
+- [ ] User profile is created in account_users table
+
 ### GET /api/user/agent-zero-status
 
 - [ ] Status check works correctly
@@ -1584,6 +2112,30 @@ Use this checklist to verify your frontend implementation:
 - [ ] Handles 500 errors gracefully
 - [ ] User can reconnect after deletion
 - [ ] Status check reflects disconnected state after deletion
+
+### GET /api/user/agent-zero-initial-credentials
+
+- [ ] Returns username when Agent Zero has no auth
+- [ ] Returns empty response when Agent Zero requires auth
+- [ ] Password is always null (never returned)
+- [ ] Handles connection errors gracefully
+- [ ] Non-blocking (never throws errors)
+- [ ] Can be used to auto-populate connection form
+
+### PUT /api/user/agent-zero-credentials
+
+- [ ] Updates Agent Zero .env file successfully
+- [ ] Updates Portal Backend stored credentials
+- [ ] Authenticates with new credentials
+- [ ] Retrieves new API key after credential update
+- [ ] Stores new API key in database
+- [ ] Returns new API key in response
+- [ ] Handles invalid old API key (401 error)
+- [ ] Handles invalid new credentials (401 error)
+- [ ] Handles connection failures (503 error)
+- [ ] Handles missing API key (404 error)
+- [ ] Old API key becomes invalid after update
+- [ ] New API key works for subsequent requests
 
 ### Error Handling
 

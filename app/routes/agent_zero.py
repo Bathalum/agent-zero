@@ -5,12 +5,16 @@ Flask routes for managing Agent Zero API key retrieval and status.
 """
 
 import logging
+import json
+import os
+from datetime import datetime
 from flask import Blueprint, request, jsonify, g
 
 from app.services.agent_zero_client import (
     get_api_key_from_agent_zero,
     authenticate_with_credentials,
     set_settings,
+    get_initial_agent_zero_credentials,
     AgentZeroConnectionError,
     AgentZeroAuthenticationError,
     AgentZeroAPIKeyNotFoundError,
@@ -22,8 +26,80 @@ from app.config import Config
 
 logger = logging.getLogger(__name__)
 
+# #region agent log
+DEBUG_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.cursor', 'debug.log')
+def _debug_log(location, message, data=None, hypothesis_id=None):
+    try:
+        log_entry = {
+            "id": f"log_{int(datetime.now().timestamp() * 1000)}",
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": hypothesis_id
+        }
+        log_dir = os.path.dirname(DEBUG_LOG_PATH)
+        os.makedirs(log_dir, exist_ok=True)
+        with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(log_entry) + '\n')
+    except Exception:
+        pass
+# #endregion
+
 # Create blueprint
 agent_zero_bp = Blueprint('agent_zero', __name__)
+
+
+@agent_zero_bp.route('/api/user/initialize-profile', methods=['POST'])
+@require_auth
+def initialize_user_profile():
+    """
+    Initialize user profile in account_users table.
+    
+    This endpoint ensures the authenticated user has a record in account_users,
+    solving the chicken-egg problem where users exist in auth.users but not
+    in account_users until they connect to Agent Zero.
+    
+    Returns:
+        JSON response:
+        {
+            "success": boolean,
+            "message": string,
+            "user_id": string
+        }
+    """
+    try:
+        user = g.user
+        db = SupabaseDB.get_instance()
+        
+        # Ensure user exists in account_users (creates if doesn't exist)
+        user_record = db.ensure_user_exists(user['id'], user.get('email'))
+        
+        logger.info(f"User profile initialized for user {user['id']}")
+        
+        return jsonify({
+            "success": True,
+            "message": "User profile initialized successfully",
+            "user_id": user['id']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error initializing user profile for user {user.get('id', 'unknown')}: {e}", exc_info=True)
+        
+        # In debug mode, include more error details
+        error_response = {
+            "success": False,
+            "message": "Failed to initialize user profile"
+        }
+        
+        # Include detailed error in development mode
+        if Config.DEBUG:
+            error_response["details"] = str(e)
+            error_response["error_type"] = type(e).__name__
+        
+        return jsonify(error_response), 500
 
 
 @agent_zero_bp.route('/api/user/agent-zero-status', methods=['GET'])
@@ -109,6 +185,71 @@ def get_agent_zero_credentials():
         return jsonify(error_response), 500
 
 
+@agent_zero_bp.route('/api/user/agent-zero-initial-credentials', methods=['GET'])
+@require_auth
+def get_initial_agent_zero_credentials_endpoint():
+    """
+    Get initial Agent Zero credentials from Agent Zero settings (if accessible).
+    
+    Attempts to fetch credentials without authentication. If Agent Zero requires
+    authentication, returns empty response indicating user must enter credentials manually.
+    
+    Returns:
+        JSON response:
+        {
+            "username": string or null,
+            "password": null (always null),
+            "available": boolean
+        }
+    """
+    try:
+        user = g.user
+        
+        # Get Agent Zero URL from request or use default
+        agent_zero_url = request.args.get('agent_zero_url') or Config.AGENT_ZERO_URL
+        
+        # Validate URL to prevent SSRF attacks
+        if not agent_zero_url.startswith(('http://', 'https://')):
+            return jsonify({
+                "username": None,
+                "password": None,
+                "available": False,
+                "message": "Invalid Agent Zero URL"
+            }), 400
+        
+        timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
+        
+        # Try to get initial credentials from Agent Zero
+        credentials = get_initial_agent_zero_credentials(agent_zero_url, timeout)
+        
+        if credentials and credentials.get('username'):
+            logger.info(f"Retrieved initial credentials for user {user['id']}")
+            return jsonify({
+                "username": credentials['username'],
+                "password": None,  # Always None - user must enter manually
+                "available": True
+            }), 200
+        else:
+            # Agent Zero requires authentication or credentials not found
+            return jsonify({
+                "username": None,
+                "password": None,
+                "available": False,
+                "message": "Agent Zero requires authentication. Please enter credentials manually."
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting initial credentials for user {user.get('id', 'unknown')}: {e}", exc_info=True)
+        
+        # Return empty response on error (best-effort endpoint)
+        return jsonify({
+            "username": None,
+            "password": None,
+            "available": False,
+            "message": "Unable to retrieve initial credentials"
+        }), 200
+
+
 @agent_zero_bp.route('/api/user/agent-zero-credentials', methods=['DELETE'])
 @require_auth
 def delete_agent_zero_credentials():
@@ -157,17 +298,24 @@ def delete_agent_zero_credentials():
         return jsonify(error_response), 500
 
 
-@agent_zero_bp.route('/api/user/connect-agent-zero', methods=['POST'])
+@agent_zero_bp.route('/api/user/agent-zero-credentials', methods=['PUT'])
 @require_auth
-def connect_agent_zero():
+def update_agent_zero_credentials():
     """
-    Connect to Agent Zero instance by storing credentials and retrieving API key.
+    Update Agent Zero credentials and automatically retrieve new API key.
+    
+    This endpoint:
+    1. Updates Agent Zero's .env file via settings API (using old API key)
+    2. Updates Portal Backend stored credentials
+    3. Authenticates with new credentials
+    4. Retrieves new API key (which changes when credentials change)
+    5. Stores new API key
     
     Request Body:
         {
-            "agent_zero_url": "http://localhost:8080",
-            "username": "user",
-            "password": "pass"
+            "username": "newusername",
+            "password": "newpassword",
+            "agent_zero_url": "http://localhost:8080"  // Optional
         }
     
     Returns:
@@ -201,18 +349,240 @@ def connect_agent_zero():
                 "message": "Invalid Agent Zero URL"
             }), 400
         
+        # Get user's stored API key (old API key needed to update settings)
+        user_record = db.get_user_by_id(user['id'])
+        if not user_record or not user_record.get('agent_zero_api_key'):
+            return jsonify({
+                "success": False,
+                "message": "Agent Zero API key not found. Please connect to Agent Zero first."
+            }), 404
+        
+        old_api_key = user_record['agent_zero_api_key']
         timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
         
-        # Store credentials in database
+        # Step 1: Update Agent Zero's .env file via settings API (using old API key)
+        try:
+            logger.info(f"Updating Agent Zero credentials for user {user['id']}")
+            set_settings(
+                agent_zero_url=agent_zero_url,
+                api_key=old_api_key,
+                settings_data={
+                    'auth_login': username,
+                    'auth_password': password
+                },
+                timeout=timeout
+            )
+            logger.info(f"Agent Zero .env file updated for user {user['id']}")
+        except AgentZeroConnectionError as e:
+            logger.error(f"Connection error updating Agent Zero settings for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+            }), 503
+        except AgentZeroAuthenticationError as e:
+            logger.error(f"Authentication error updating Agent Zero settings for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": f"Authentication failed with stored API key: {str(e)}. Please reconnect to Agent Zero."
+            }), 401
+        except AgentZeroClientError as e:
+            logger.error(f"Client error updating Agent Zero settings for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": f"Error updating Agent Zero settings: {str(e)}"
+            }), 500
+        
+        # Step 2: Update Portal Backend stored credentials
         try:
             db.store_agent_zero_credentials(
                 user_id=user['id'],
                 username=username,
                 password=password,
+                agent_zero_url=agent_zero_url,
+                email=user.get('email')
+            )
+            logger.info(f"Updated Portal Backend credentials for user {user['id']}")
+        except Exception as e:
+            logger.error(f"Error updating Portal Backend credentials for user {user['id']}: {e}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "message": "Failed to update stored credentials"
+            }), 500
+        
+        # Step 3: Authenticate with new credentials
+        try:
+            auth_result = authenticate_with_credentials(
+                agent_zero_url=agent_zero_url,
+                username=username,
+                password=password,
+                timeout=timeout
+            )
+        except AgentZeroConnectionError as e:
+            logger.error(f"Connection error authenticating with new credentials for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+            }), 503
+        except AgentZeroAuthenticationError as e:
+            logger.error(f"Authentication error with new credentials for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": f"Authentication failed with new credentials: {str(e)}"
+            }), 401
+        
+        # Step 4: Retrieve new API key (which changed when credentials changed)
+        try:
+            new_api_key = get_api_key_from_agent_zero(
+                agent_zero_url=agent_zero_url,
+                timeout=timeout,
+                session_cookies=auth_result['session_cookies'],
+                csrf_token=auth_result['csrf_token']
+            )
+        except AgentZeroAPIKeyNotFoundError as e:
+            logger.error(f"API key not found after credential update for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": "API key not found in Agent Zero settings."
+            }), 404
+        except AgentZeroClientError as e:
+            logger.error(f"Client error retrieving new API key for user {user['id']}: {e}")
+            return jsonify({
+                "success": False,
+                "message": f"Error retrieving new API key: {str(e)}"
+            }), 500
+        
+        # Step 5: Store new API key
+        try:
+            db.update_user_agent_zero_config(
+                user_id=user['id'],
+                api_key=new_api_key,
                 agent_zero_url=agent_zero_url
             )
+            logger.info(f"Successfully updated credentials and API key for user {user['id']}")
+            
+            return jsonify({
+                "success": True,
+                "message": "Credentials updated successfully. New API key retrieved.",
+                "api_key": new_api_key
+            }), 200
+            
+        except Exception as e:
+            logger.error(f"Database error storing new API key for user {user['id']}: {e}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "message": "Failed to store new API key."
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Unexpected error updating credentials: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": "An unexpected error occurred"
+        }), 500
+
+
+@agent_zero_bp.route('/api/user/connect-agent-zero', methods=['POST'])
+@require_auth
+def connect_agent_zero():
+    """
+    Connect to Agent Zero instance by storing credentials and retrieving API key.
+    
+    Request Body:
+        {
+            "agent_zero_url": "http://localhost:8080",
+            "username": "user",
+            "password": "pass"
+        }
+    
+    Returns:
+        JSON response:
+        {
+            "success": boolean,
+            "message": string,
+            "api_key": string (only if success)
+        }
+    """
+    # #region agent log
+    _debug_log("app/routes/agent_zero.py:connect_agent_zero", "Endpoint called", {
+        "method": request.method,
+        "has_user": hasattr(g, 'user'),
+        "user_id": g.user.get('id') if hasattr(g, 'user') else None
+    }, "A")
+    # #endregion
+    
+    try:
+        user = g.user
+        db = SupabaseDB.get_instance()
+        
+        # #region agent log
+        _debug_log("app/routes/agent_zero.py:connect_agent_zero", "Database instance obtained", {
+            "db_exists": db is not None,
+            "user_id": user['id']
+        }, "C")
+        # #endregion
+        
+        # Get request data
+        request_data = request.get_json() or {}
+        agent_zero_url = request_data.get('agent_zero_url') or Config.AGENT_ZERO_URL
+        username = request_data.get('username')
+        password = request_data.get('password')
+        
+        # #region agent log
+        _debug_log("app/routes/agent_zero.py:connect_agent_zero", "Request data parsed", {
+            "has_username": bool(username),
+            "has_password": bool(password),
+            "agent_zero_url": agent_zero_url
+        }, "E")
+        # #endregion
+        
+        # Validate input
+        if not username or not password:
+            return jsonify({
+                "success": False,
+                "message": "Username and password are required"
+            }), 400
+        
+        if not agent_zero_url.startswith(('http://', 'https://')):
+            return jsonify({
+                "success": False,
+                "message": "Invalid Agent Zero URL"
+            }), 400
+        
+        timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
+        
+        # Store credentials in database
+        try:
+            # #region agent log
+            _debug_log("app/routes/agent_zero.py:connect_agent_zero", "Calling store_agent_zero_credentials", {
+                "user_id": user['id'],
+                "username": username,
+                "has_email": 'email' in user,
+                "user_email": user.get('email')
+            }, "B")
+            # #endregion
+            db.store_agent_zero_credentials(
+                user_id=user['id'],
+                username=username,
+                password=password,
+                agent_zero_url=agent_zero_url,
+                email=user.get('email')
+            )
+            # #region agent log
+            _debug_log("app/routes/agent_zero.py:connect_agent_zero", "store_agent_zero_credentials succeeded", {
+                "user_id": user['id']
+            }, "E")
+            # #endregion
             logger.info(f"Stored credentials for user {user['id']}")
         except Exception as e:
+            # #region agent log
+            _debug_log("app/routes/agent_zero.py:connect_agent_zero", "store_agent_zero_credentials failed", {
+                "user_id": user['id'],
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "is_value_error": isinstance(e, ValueError),
+                "contains_migration": "migration required" in str(e).lower()
+            }, "E")
+            # #endregion
             logger.error(f"Error storing credentials for user {user['id']}: {e}", exc_info=True)
             
             # Provide helpful error message for missing migration
