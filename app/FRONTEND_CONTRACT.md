@@ -19,9 +19,8 @@
 4. [Error Handling](#error-handling)
 5. [Flow Diagrams](#flow-diagrams)
 6. [Implementation Examples](#implementation-examples)
-7. [Common Patterns](#common-patterns)
-8. [Security Considerations](#security-considerations)
-9. [Testing Checklist](#testing-checklist)
+7. [Security Considerations](#security-considerations)
+8. [Testing Checklist](#testing-checklist)
 
 ---
 
@@ -41,7 +40,7 @@ The Portal Backend API provides a secure bridge between your frontend applicatio
 The Portal Backend base URL depends on your deployment:
 
 - **Local Development**: `http://localhost:5000`
-- **Docker**: `http://localhost:5000` (configurable via `PORTAL_PORT`)
+- **Docker**: `http://localhost:5000` (configurable via `PORT` environment variable)
 - **Production**: Your deployed backend URL (e.g., `https://api.yourdomain.com`)
 
 All endpoints are prefixed with `/api/user/`.
@@ -74,6 +73,53 @@ The Portal Backend follows these design principles:
    - **Agent Zero**: Validates settings, processes updates, manages state
 
 3. **Efficiency**: Portal Backend makes a single API call per operation (no pre-fetching of current settings before updates).
+
+---
+
+## Complete Integration Flow
+
+### Overview
+
+The complete integration flow consists of two phases:
+
+1. **Portal Backend Setup Phase**: Authentication, credential storage, and API key retrieval (via REST API)
+2. **AG-UI Real-Time Phase**: Direct real-time communication with Agent Zero (bypassing Portal Backend)
+
+### Architecture Flow Diagram
+
+```mermaid
+graph TD
+    Frontend[Frontend Application]
+    Supabase[Supabase Auth]
+    PortalBackend[Portal Backend<br/>Flask API]
+    AgentZero[Agent Zero Instance<br/>REST API]
+    AGUIServer[AG-UI Server<br/>/agui/sse, /agui/ws]
+    
+    Frontend -->|1. Login| Supabase
+    Supabase -->|JWT Token| Frontend
+    Frontend -->|2. Initialize Profile<br/>Authorization: Bearer JWT| PortalBackend
+    Frontend -->|3. Connect Agent Zero<br/>username, password| PortalBackend
+    PortalBackend -->|Authenticate & Get API Key| AgentZero
+    AgentZero -->|API Key| PortalBackend
+    PortalBackend -->|Store Credentials & API Key| PortalBackend
+    Frontend -->|4. Get Status<br/>Get configured_url| PortalBackend
+    PortalBackend -->|configured_url| Frontend
+    Frontend -->|5. Direct AG-UI Connection<br/>Bypass Portal Backend| AGUIServer
+    AGUIServer -->|Real-time Events<br/>stream_chunk, stream_end| Frontend
+    AgentZero -->|Process Messages| AGUIServer
+```
+
+### Integration Steps
+
+1. **Authenticate with Supabase** → Get JWT token from `session.access_token`
+2. **Initialize Profile** → `POST /api/user/initialize-profile` (ensures user record exists)
+3. **Connect to Agent Zero** → `POST /api/user/connect-agent-zero` (stores credentials, retrieves API key)
+4. **Get Agent Zero URL** → `GET /api/user/agent-zero-status` (use `configured_url` field for AG-UI)
+5. **Connect to AG-UI** → Direct connection to Agent Zero using `AGUIClient` (bypasses Portal Backend)
+
+**Important**: Always use `configured_url` from the status endpoint (not `agent_zero_url`) for AG-UI connections. This ensures correct URL resolution in Docker and production environments.
+
+See the [Complete Integration Example](#complete-integration-example) section below for full code examples.
 
 ---
 
@@ -133,6 +179,8 @@ JWT tokens have an expiration time. The frontend should:
 
 ### 401 Unauthorized Responses
 
+**⚠️ CRITICAL**: If login/password works in Agent Zero's native UI but fails in your frontend UI, you're likely missing the `Authorization` header.
+
 If the JWT token is missing, invalid, or expired, the backend returns:
 
 ```json
@@ -143,7 +191,21 @@ If the JWT token is missing, invalid, or expired, the backend returns:
 
 **Status Code**: `401 Unauthorized`
 
-**Action**: Frontend should refresh the token or redirect user to login.
+**Note**: The error message may vary based on the specific authentication failure:
+- `"Token expired"` - JWT token has expired
+- `"Invalid token: ..."` - Token format is invalid or cannot be decoded
+- `"Authentication failed"` - Generic authentication failure (for unexpected errors)
+- `"Authorization header required"` - Missing Authorization header
+
+**Common Causes**:
+- Missing `Authorization: Bearer <token>` header
+- Expired JWT token
+- Invalid token format
+
+**Action**: 
+1. Verify `Authorization: Bearer ${session.access_token}` is included in ALL requests
+2. Refresh token using `supabase.auth.refreshSession()` if expired
+3. Redirect user to login if refresh fails
 
 ---
 
@@ -172,6 +234,8 @@ Ensure the authenticated user has a record in the `account_users` table. This so
 Authorization: Bearer <supabase-jwt-token>
 Content-Type: application/json
 ```
+
+**Note**: `Content-Type: application/json` is required for all POST/PUT requests with request bodies. GET/DELETE requests typically don't require this header.
 
 **Request Body**: None (user info comes from JWT token)
 
@@ -279,14 +343,20 @@ Authorization: Bearer <supabase-jwt-token>
 {
   "has_api_key": true,
   "agent_zero_url": "http://localhost:8080",
+  "configured_url": "http://localhost:8080",
   "api_key_retrieved_at": "2025-01-08T12:34:56.789Z"
 }
 ```
 
 **Fields**:
 - `has_api_key` (boolean): Whether the user has a stored API key
-- `agent_zero_url` (string | null): The Agent Zero instance URL (if connected)
+- `agent_zero_url` (string | null): The Agent Zero instance URL stored in the database (for display/reference only)
+- `configured_url` (string): **The Agent Zero URL to use for AG-UI connections**. This is the URL configured in the Portal Backend's `AGENT_ZERO_URL` environment variable, which correctly handles Docker service names and production URLs.
 - `api_key_retrieved_at` (string | null): ISO timestamp of when the API key was last retrieved
+
+**Important URL Fields**:
+- **`configured_url`**: Use this URL for AG-UI connections (`AGUIClient`). This is the actual URL used by the Portal Backend for connections and correctly resolves Docker service names (e.g., `http://agent-zero-local:80` becomes `http://localhost:8080` for frontend).
+- **`agent_zero_url`**: This is the URL stored in the database (may be provided by frontend during connection setup). It's for display/reference only and may not be suitable for direct frontend connections in Docker environments.
 
 **Error (500 Internal Server Error)**:
 
@@ -296,12 +366,46 @@ Authorization: Bearer <supabase-jwt-token>
 }
 ```
 
+**Note**: In DEBUG mode, this response may include additional fields:
+```json
+{
+  "error": "Failed to retrieve Agent Zero status",
+  "details": "Detailed error information",
+  "error_type": "ExceptionClassName"
+}
+```
+
 #### Usage
 
 Use this endpoint to:
 - Check if user needs to connect to Agent Zero
 - Display connection status in UI
+- **Get the Agent Zero URL for AG-UI connections** (use `configured_url` field)
 - Determine if settings can be updated
+
+#### Example: Getting URL for AG-UI Connection
+
+```javascript
+// Get status
+const statusResponse = await fetch('http://localhost:5000/api/user/agent-zero-status', {
+  headers: {
+    'Authorization': `Bearer ${jwtToken}`
+  }
+})
+
+const { configured_url, has_api_key } = await statusResponse.json()
+
+// Use configured_url for AG-UI client
+if (has_api_key) {
+  const aguiClient = new AGUIClient({
+    url: configured_url,  // Use configured_url, not agent_zero_url
+    contextId: 'chat-123',
+    transport: 'auto'
+  })
+  
+  await aguiClient.connect()
+}
+```
 
 ---
 
@@ -315,9 +419,8 @@ Initial connection setup for users who haven't connected to Agent Zero yet, or t
 
 #### When to Use
 
-- **First-time connection**: User provides Agent Zero URL, username, and password
-- **Reconnection**: Update credentials or change Agent Zero instance URL
-- **Credential update**: Update stored credentials
+- First-time connection setup
+- Updating stored credentials
 
 #### Request
 
@@ -328,6 +431,8 @@ Initial connection setup for users who haven't connected to Agent Zero yet, or t
 Authorization: Bearer <supabase-jwt-token>
 Content-Type: application/json
 ```
+
+**Note**: `Content-Type: application/json` is **required** for all POST/PUT requests with request bodies.
 
 **Request Body**:
 
@@ -340,9 +445,11 @@ Content-Type: application/json
 ```
 
 **Fields**:
-- `agent_zero_url` (string, optional): Agent Zero instance URL. Defaults to backend's `AGENT_ZERO_URL` config if not provided. Must start with `http://` or `https://`.
+- `agent_zero_url` (string, optional): **RECOMMENDED: Omit this field.** If provided, backend stores it for display/reference but uses its own environment-configured URL (`AGENT_ZERO_URL`) for actual connections. This ensures correct behavior in Docker (uses service name) and production. Must start with `http://` or `https://` if provided.
 - `username` (string, required): Agent Zero username (from Agent Zero's `AUTH_LOGIN` environment variable)
 - `password` (string, required): Agent Zero password (from Agent Zero's `AUTH_PASSWORD` environment variable)
+
+**Note**: The `agent_zero_url` field is optional. If provided, it's stored for display/reference only. The backend always uses its configured `AGENT_ZERO_URL` environment variable for actual connections (handles Docker service names correctly).
 
 #### Response
 
@@ -381,12 +488,41 @@ Or:
 
 **Error - Authentication Failed (401 Unauthorized)**:
 
-```json
-{
-  "success": false,
-  "message": "Authentication failed: Invalid username or password"
-}
-```
+This can mean two things:
+1. **Portal Backend authentication failed** (missing/invalid Supabase JWT token):
+   ```json
+   {
+     "error": "Authentication failed"
+   }
+   ```
+   Or with more specific error messages:
+   ```json
+   {
+     "error": "Token expired"
+   }
+   ```
+   ```json
+   {
+     "error": "Invalid token: ..."
+   }
+   ```
+   → Check `Authorization: Bearer <token>` header is included
+
+2. **Agent Zero authentication failed** (invalid username/password):
+   ```json
+   {
+     "success": false,
+     "message": "Authentication failed: Invalid username or password"
+   }
+   ```
+   **Note**: In DEBUG mode, the error message may include additional context like the Agent Zero URL:
+   ```json
+   {
+     "success": false,
+     "message": "Authentication failed: Invalid username or password (URL: http://localhost:8080)"
+   }
+   ```
+   → Verify Agent Zero credentials are correct
 
 **Error - Connection Failed (503 Service Unavailable)**:
 
@@ -436,7 +572,7 @@ Or:
 
 - User's credentials are stored (encrypted) in the database
 - User's API key is stored in the database
-- User's `agent_zero_url` is stored/updated
+- User's `agent_zero_url` is stored/updated (if provided, otherwise uses backend's configured URL)
 
 ---
 
@@ -450,9 +586,7 @@ Get the stored API key, or retrieve it from Agent Zero if not stored (using stor
 
 #### When to Use
 
-- Check if API key exists (check response for `api_key` field)
-- Refresh API key if it might have changed
-- Retrieve API key after credentials have been stored via `connect-agent-zero`
+- Retrieving or refreshing the stored API key
 
 #### Request
 
@@ -464,16 +598,11 @@ Authorization: Bearer <supabase-jwt-token>
 Content-Type: application/json
 ```
 
-**Request Body** (optional):
+**Note**: `Content-Type: application/json` is **required** for all POST/PUT requests with request bodies.
 
-```json
-{
-  "agent_zero_url": "http://localhost:8080"
-}
-```
+**Request Body**: Optional (empty object `{}` or omitted)
 
-**Fields**:
-- `agent_zero_url` (string, optional): Agent Zero instance URL. Defaults to backend's `AGENT_ZERO_URL` config or user's stored URL.
+**Note**: The `agent_zero_url` field in the request body is ignored. The backend always uses its configured `AGENT_ZERO_URL` environment variable for connections.
 
 #### Response
 
@@ -525,6 +654,8 @@ If authentication fails:
   "message": "Invalid username or password"
 }
 ```
+
+**Note**: The exact error message format may vary based on the specific authentication error from Agent Zero. The message will always be in the `message` field.
 
 **Error - Connection Failed (503 Service Unavailable)**:
 
@@ -592,6 +723,8 @@ Update configuration settings in Agent Zero (e.g., OpenRouter API key, model set
 Authorization: Bearer <supabase-jwt-token>
 Content-Type: application/json
 ```
+
+**Note**: `Content-Type: application/json` is **required** for all POST/PUT requests with request bodies.
 
 **Request Body**:
 
@@ -662,6 +795,8 @@ Content-Type: application/json
   "message": "Authentication failed: Invalid API key. Please reconnect to Agent Zero."
 }
 ```
+
+**Note**: The error message may include more specific details about the authentication failure. In DEBUG mode, additional context (like URLs) may be included in the message.
 
 **Error - Connection Failed (503 Service Unavailable)**:
 
@@ -734,19 +869,14 @@ In this example:
 
 Sending an empty string `""` will clear/remove the API key.
 
-#### Frontend Responsibilities
+#### Settings Format
 
-The frontend is responsible for:
+The Portal Backend accepts settings in a flat dictionary format and automatically transforms them to the sections format required by Agent Zero:
 
-1. **Validation**: Validate Agent Zero responses (from `/api/settings_get`) before using them. Portal Backend acts as a pass-through and does not validate Agent Zero's response structure.
+- **Flat dictionary**: `{"api_key_openai": "sk-...", "chat_model_name": "gpt-4"}` → Automatically transformed
+- **Sections format**: `{"sections": [...]}` → Used as-is (backward compatible)
 
-2. **Sending Placeholders**: When preserving existing values (especially API keys), explicitly include the field with value `"************"` in your update request.
-
-3. **Field Selection**: Only include fields that have been modified by the user. Unchanged fields should either:
-   - Be omitted (to preserve existing value), OR
-   - Include placeholder `"************"` (to explicitly preserve)
-
-4. **Error Handling**: Handle validation errors if Agent Zero returns malformed data structures.
+Only fields included in the request are updated. Omit fields to preserve existing values, or use `"************"` placeholder to explicitly preserve a field.
 
 ---
 
@@ -760,9 +890,7 @@ Attempt to auto-populate the username field in the connection form by fetching c
 
 #### When to Use
 
-- **On connection modal open**: Call this endpoint when user opens the "Agent Zero Connection" modal
-- **First-time connection**: Use to auto-fill username field (password must be entered manually)
-- **Best-effort helper**: This endpoint may not work if Agent Zero requires authentication
+- Auto-populate username field in connection form (best-effort, may not work if Agent Zero requires authentication)
 
 #### Request
 
@@ -773,8 +901,7 @@ Attempt to auto-populate the username field in the connection form by fetching c
 Authorization: Bearer <supabase-jwt-token>
 ```
 
-**URL Parameters** (optional):
-- `agent_zero_url` (string, optional): Agent Zero instance URL. Defaults to backend's `AGENT_ZERO_URL` config if not provided.
+**URL Parameters**: None (always uses backend's configured `AGENT_ZERO_URL`)
 
 #### Response
 
@@ -867,9 +994,8 @@ Get the stored username, password, and Agent Zero URL. Useful for pre-filling co
 
 #### When to Use
 
-- Pre-fill connection form with stored credentials
-- Display current connection details to user
-- Verify what credentials are stored
+- Pre-filling connection forms
+- Displaying current connection details
 
 #### Request
 
@@ -944,9 +1070,7 @@ Update both Agent Zero's .env file and Portal Backend stored credentials, then a
 
 #### When to Use
 
-- **Change credentials**: User wants to update their Agent Zero username and/or password
-- **Security update**: User wants to change credentials for security reasons
-- **Credential rotation**: Regular credential rotation for security best practices
+- Updating Agent Zero username and/or password (automatically retrieves new API key)
 
 #### Request
 
@@ -957,6 +1081,8 @@ Update both Agent Zero's .env file and Portal Backend stored credentials, then a
 Authorization: Bearer <supabase-jwt-token>
 Content-Type: application/json
 ```
+
+**Note**: `Content-Type: application/json` is **required** for all POST/PUT requests with request bodies.
 
 **Request Body**:
 
@@ -1025,6 +1151,8 @@ Or:
   "message": "Authentication failed with new credentials: [details]"
 }
 ```
+
+**Note**: The `[details]` placeholder will contain the actual error message from Agent Zero. The exact format may vary based on the specific authentication failure.
 
 **Error - Connection Failed (503 Service Unavailable)**:
 
@@ -1125,10 +1253,8 @@ Disconnect from Agent Zero by removing all stored credentials and API key. This 
 
 #### When to Use
 
-- User wants to disconnect from Agent Zero
-- User wants to clear stored credentials
-- User wants to switch to a different Agent Zero instance
-- Security: User wants to remove credentials from system
+- Disconnecting from Agent Zero
+- Clearing stored credentials
 
 #### Request
 
@@ -1213,6 +1339,25 @@ For endpoints that don't use the `success` field (like `/agent-zero-status`):
   "error": "Error message"
 }
 ```
+
+### Debug Mode Error Details
+
+**Note**: When the Portal Backend is running in DEBUG mode (development), error responses may include additional diagnostic fields:
+
+```json
+{
+  "success": false,
+  "message": "Error message",
+  "details": "Detailed error information",
+  "error_type": "ExceptionClassName"
+}
+```
+
+**Production vs Development**:
+- **Production**: Only `success` and `message` (or `error`) fields are returned
+- **Development/DEBUG**: Additional `details` and `error_type` fields may be included for debugging
+
+**Frontend Implementation**: Your frontend should handle both formats gracefully. Always check for `message` or `error` fields for user-facing messages, and optionally log `details` and `error_type` for debugging purposes.
 
 ### Status Codes
 
@@ -1335,318 +1480,57 @@ import { useSupabaseClient } from '@supabase/supabase-js'
 
 const AgentZeroConnection = () => {
   const supabase = useSupabaseClient()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [status, setStatus] = useState(null)
 
-  // Check connection status on mount
   useEffect(() => {
     checkStatus()
   }, [])
 
   const checkStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-
-      const response = await fetch('http://localhost:5000/api/user/agent-zero-status', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setStatus(data)
-      }
-    } catch (err) {
-      console.error('Failed to check status:', err)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    
+    const response = await fetch('http://localhost:5000/api/user/agent-zero-status', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` }
+    })
+    
+    if (response.ok) {
+      setStatus(await response.json())
     }
   }
 
-  const connect = async (url, username, password) => {
-    setLoading(true)
-    setError(null)
+  const connect = async (username, password) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('Not authenticated')
-      }
+    const response = await fetch('http://localhost:5000/api/user/connect-agent-zero', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    })
 
-      const response = await fetch('http://localhost:5000/api/user/connect-agent-zero', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          agent_zero_url: url,
-          username,
-          password
-        })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Connection failed')
-      }
-
-      // Success - refresh status
+    if (response.ok) {
       await checkStatus()
-      alert('Successfully connected!')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const updateSettings = async (settings) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('Not authenticated')
-      }
-
-      const response = await fetch('http://localhost:5000/api/user/update-agent-zero-settings', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ settings })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Update failed')
-      }
-
-      alert('Settings updated successfully!')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+    } else {
+      const error = await response.json()
+      throw new Error(error.message || 'Connection failed')
     }
   }
 
   return (
     <div>
-      {error && <div className="error">{error}</div>}
-      {loading && <div>Loading...</div>}
-      
       {status && (
-        <div>
-          <p>Status: {status.has_api_key ? 'Connected' : 'Not Connected'}</p>
-          {status.agent_zero_url && <p>URL: {status.agent_zero_url}</p>}
-        </div>
+        <p>Status: {status.has_api_key ? 'Connected' : 'Not Connected'}</p>
       )}
-
-      {/* Connection form would go here */}
     </div>
   )
 }
-
-export default AgentZeroConnection
 ```
 
-### Vanilla JavaScript Example
-
-```javascript
-class PortalBackendClient {
-  constructor(baseURL, getToken) {
-    this.baseURL = baseURL
-    this.getToken = getToken // Function that returns JWT token
-  }
-
-  async request(endpoint, options = {}) {
-    const token = await this.getToken()
-    
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.message || data.error || `HTTP ${response.status}`)
-    }
-
-    return data
-  }
-
-  async initializeProfile() {
-    return this.request('/api/user/initialize-profile', {
-      method: 'POST'
-    })
-  }
-
-  async getStatus() {
-    return this.request('/api/user/agent-zero-status', {
-      method: 'GET'
-    })
-  }
-
-  async connectAgentZero(url, username, password) {
-    return this.request('/api/user/connect-agent-zero', {
-      method: 'POST',
-      body: JSON.stringify({
-        agent_zero_url: url,
-        username,
-        password
-      })
-    })
-  }
-
-  async updateSettings(settings) {
-    return this.request('/api/user/update-agent-zero-settings', {
-      method: 'POST',
-      body: JSON.stringify({ settings })
-    })
-  }
-
-  async getAPIKey(url = null) {
-    const body = url ? { agent_zero_url: url } : {}
-    return this.request('/api/user/get-agent-zero-api-key', {
-      method: 'POST',
-      body: JSON.stringify(body)
-    })
-  }
-
-  async getInitialCredentials(url = null) {
-    const query = url ? `?agent_zero_url=${encodeURIComponent(url)}` : ''
-    return this.request(`/api/user/agent-zero-initial-credentials${query}`, {
-      method: 'GET'
-    })
-  }
-
-  async getCredentials() {
-    return this.request('/api/user/agent-zero-credentials', {
-      method: 'GET'
-    })
-  }
-
-  async updateCredentials(username, password, url = null) {
-    const body = { username, password }
-    if (url) body.agent_zero_url = url
-    return this.request('/api/user/agent-zero-credentials', {
-      method: 'PUT',
-      body: JSON.stringify(body)
-    })
-  }
-
-  async deleteCredentials() {
-    return this.request('/api/user/agent-zero-credentials', {
-      method: 'DELETE'
-    })
-  }
-}
-
-// Usage
-const client = new PortalBackendClient(
-  'http://localhost:5000',
-  async () => {
-    // Get JWT token from Supabase
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token
-  }
-)
-
-// Initialize profile (call after authentication)
-try {
-  await client.initializeProfile()
-  console.log('Profile initialized')
-} catch (error) {
-  console.error('Error:', error.message)
-}
-
-// Check status
-try {
-  const status = await client.getStatus()
-  console.log('Connected:', status.has_api_key)
-} catch (error) {
-  console.error('Error:', error.message)
-}
-
-// Get initial credentials (auto-populate username)
-try {
-  const initial = await client.getInitialCredentials()
-  if (initial.available) {
-    console.log('Username available:', initial.username)
-    // Auto-fill username field in connection form
-  }
-} catch (error) {
-  console.error('Error:', error.message)
-}
-
-// Update credentials
-try {
-  const result = await client.updateCredentials('newuser', 'newpass')
-  if (result.success) {
-    console.log('Credentials updated, new API key:', result.api_key)
-  }
-} catch (error) {
-  console.error('Error:', error.message)
-}
-
-// Connect to Agent Zero
-try {
-  const result = await client.connectAgentZero(
-    'http://localhost:8080',
-    'myusername',
-    'mypassword'
-  )
-  console.log('API Key:', result.api_key)
-} catch (error) {
-  console.error('Connection failed:', error.message)
-}
-
-// Update settings
-try {
-  await client.updateSettings({
-    api_key_openrouter: 'sk-or-v1-...',
-    chat_model_name: 'openai/gpt-4'
-  })
-  console.log('Settings updated')
-} catch (error) {
-  console.error('Update failed:', error.message)
-}
-
-// Get stored credentials
-try {
-  const credentials = await client.getCredentials()
-  console.log('Username:', credentials.username)
-  console.log('URL:', credentials.agent_zero_url)
-  // Password is also available but should be handled securely
-} catch (error) {
-  if (error.message.includes('not found')) {
-    console.log('No credentials stored')
-  } else {
-    console.error('Error:', error.message)
-  }
-}
-
-// Delete credentials (disconnect)
-try {
-  await client.deleteCredentials()
-  console.log('Disconnected from Agent Zero')
-} catch (error) {
-  console.error('Disconnect failed:', error.message)
-}
-```
-
-### TypeScript Types Example
+### Client Library Example (Vanilla JS / TypeScript)
 
 ```typescript
 interface AgentZeroStatus {
@@ -1656,7 +1540,7 @@ interface AgentZeroStatus {
 }
 
 interface ConnectAgentZeroRequest {
-  agent_zero_url?: string
+  agent_zero_url?: string  // Optional - backend uses env-configured URL for connections
   username: string
   password: string
 }
@@ -1695,13 +1579,15 @@ class PortalBackendClient {
   }
 
   async connectAgentZero(
-    request: ConnectAgentZeroRequest
+    username: string,
+    password: string,
+    agentZeroUrl?: string  // Optional - for storage/display only
   ): Promise<ConnectAgentZeroResponse> {
     return this.request<ConnectAgentZeroResponse>(
       '/api/user/connect-agent-zero',
       {
         method: 'POST',
-        body: JSON.stringify(request)
+        body: JSON.stringify({ username, password, ...(agentZeroUrl && { agent_zero_url: agentZeroUrl }) })
       }
     )
   }
@@ -1748,262 +1634,200 @@ class PortalBackendClient {
 }
 ```
 
----
+### Complete Integration Example
 
-## Common Patterns
-
-### Auto-Populating Connection Form
-
-Fetch initial credentials to pre-fill the username field when opening the connection modal:
+This example shows the complete flow from Supabase authentication through Portal Backend setup to AG-UI real-time communication:
 
 ```javascript
-async function loadConnectionForm() {
-  try {
-    // Try to get initial credentials from Agent Zero
-    const initial = await client.getInitialCredentials()
-    
-    if (initial.available && initial.username) {
-      // Auto-fill username field
-      setUsername(initial.username)
-      // Password field stays empty - user must enter manually
-    } else {
-      // Credentials not available - user must enter manually
-      // This is normal if Agent Zero requires authentication
-      console.log(initial.message || 'Enter credentials manually')
-    }
-  } catch (error) {
-    // Non-critical error - user can still enter credentials manually
-    console.error('Could not load initial credentials:', error)
-  }
-}
-```
+import { createClient } from '@supabase/supabase-js'
+import { AGUIClient } from '@argent/agui-client'
 
-### Updating Agent Zero Credentials
+// Step 1: Initialize Supabase client
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-Update credentials and automatically handle API key transition:
-
-```javascript
-async function updateAgentZeroCredentials(newUsername, newPassword) {
-  try {
-    const result = await client.updateCredentials(newUsername, newPassword)
-    
-    if (result.success) {
-      console.log('Credentials updated successfully')
-      console.log('New API key:', result.api_key)
-      
-      // Show success message to user
-      showNotification('Credentials updated successfully', 'success')
-      
-      // Optionally show new API key (with security warning)
-      // Note: API key is also stored automatically, so this is optional
-    } else {
-      showNotification('Failed to update credentials: ' + result.message, 'error')
-    }
-  } catch (error) {
-    showNotification('Error updating credentials: ' + error.message, 'error')
-  }
-}
-```
-
-### Initializing User Profile on Login
-
-Always initialize user profile after authentication:
-
-```javascript
-async function onUserLogin() {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return
-
-  // Initialize user profile in Portal Backend
-  try {
-    await client.initializeProfile()
-    console.log('User profile initialized')
-  } catch (error) {
-    console.error('Failed to initialize profile:', error)
-    // Non-critical - user can still use the app
-  }
-
-  // Now safe to check Agent Zero status
-  const status = await client.getStatus()
-  // ...
-}
-```
-
-### Checking Connection Status Before Operations
-
-Always check if the user is connected before allowing settings updates:
-
-```javascript
-async function canUpdateSettings() {
-  const status = await client.getStatus()
-  return status.has_api_key
-}
-
-// Before updating settings
-if (!(await canUpdateSettings())) {
-  alert('Please connect to Agent Zero first')
-  return
-}
-
-await client.updateSettings({ ... })
-```
-
-### Pre-filling Connection Form
-
-Retrieve stored credentials to pre-fill the connection form:
-
-```javascript
-async function prefillConnectionForm() {
-  try {
-    const credentials = await client.getCredentials()
-    setUrl(credentials.agent_zero_url)
-    setUsername(credentials.username)
-    setPassword(credentials.password)
-  } catch (error) {
-    if (error.message.includes('not found')) {
-      // No credentials stored - form stays empty
-      return
-    }
-    console.error('Error loading credentials:', error)
-  }
-}
-```
-
-### Disconnecting from Agent Zero
-
-Clear all stored credentials and API key:
-
-```javascript
-async function disconnectAgentZero() {
-  if (!confirm('Are you sure you want to disconnect? This will clear all stored credentials.')) {
-    return
-  }
-
-  try {
-    await client.deleteCredentials()
-    showNotification('Disconnected from Agent Zero', 'success')
-    // Refresh status
-    await checkStatus()
-  } catch (error) {
-    showNotification('Failed to disconnect: ' + error.message, 'error')
-  }
-}
-```
-
-### Handling Expired Tokens
-
-Implement automatic token refresh:
-
-```javascript
-let tokenRefreshPromise = null
-
-async function getTokenWithRefresh() {
-  const { data: { session } } = await supabase.auth.getSession()
+// Step 2: Authenticate user and get JWT token
+async function authenticateUser(email, password) {
+  const { data: { session }, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  })
   
-  if (!session) {
-    throw new Error('Not authenticated')
-  }
-
-  // Check if token expires soon (within 5 minutes)
-  const expiresAt = session.expires_at * 1000
-  const now = Date.now()
-  const fiveMinutes = 5 * 60 * 1000
-
-  if (expiresAt - now < fiveMinutes) {
-    // Refresh token
-    if (!tokenRefreshPromise) {
-      tokenRefreshPromise = supabase.auth.refreshSession()
-    }
-    const { data } = await tokenRefreshPromise
-    tokenRefreshPromise = null
-    return data.session.access_token
-  }
-
+  if (error) throw error
   return session.access_token
 }
-```
 
-### Storing Agent Zero URL in Frontend State
-
-Once connected, store the URL for future requests:
-
-```javascript
-const [agentZeroURL, setAgentZeroURL] = useState(null)
-
-useEffect(() => {
-  client.getStatus().then(status => {
-    if (status.agent_zero_url) {
-      setAgentZeroURL(status.agent_zero_url)
+// Step 3: Initialize user profile in Portal Backend
+async function initializeProfile(jwtToken) {
+  const response = await fetch('http://localhost:5000/api/user/initialize-profile', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
     }
   })
-}, [])
-
-// Use when updating settings
-await client.updateSettings({ ... }) // Uses stored URL automatically
-```
-
-### Form Validation
-
-Validate inputs before sending requests:
-
-```javascript
-function validateConnectionForm(url, username, password) {
-  const errors = []
-
-  if (!url || !url.startsWith('http://') && !url.startsWith('https://')) {
-    errors.push('URL must start with http:// or https://')
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || 'Failed to initialize profile')
   }
-
-  if (!username || username.trim().length === 0) {
-    errors.push('Username is required')
-  }
-
-  if (!password || password.length === 0) {
-    errors.push('Password is required')
-  }
-
-  return errors
+  
+  return await response.json()
 }
 
-// Before submitting
-const errors = validateConnectionForm(url, username, password)
-if (errors.length > 0) {
-  setFormErrors(errors)
-  return
+// Step 4: Connect to Agent Zero via Portal Backend
+async function connectToAgentZero(jwtToken, username, password) {
+  const response = await fetch('http://localhost:5000/api/user/connect-agent-zero', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      username,
+      password
+      // Note: agent_zero_url is optional - backend uses configured URL
+    })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || 'Failed to connect to Agent Zero')
+  }
+  
+  return await response.json()
 }
-```
 
-### User Feedback Patterns
-
-Provide clear feedback for all operations:
-
-```javascript
-async function handleConnect() {
-  setLoading(true)
-  setError(null)
-
-  try {
-    const result = await client.connectAgentZero(url, username, password)
-    // Success feedback
-    showNotification('Successfully connected to Agent Zero!', 'success')
-    // Clear form
-    setUrl('')
-    setUsername('')
-    setPassword('')
-  } catch (err) {
-    // Error feedback
-    if (err.message.includes('Authentication failed')) {
-      setError('Invalid username or password')
-    } else if (err.message.includes('Unable to connect')) {
-      setError('Cannot connect to Agent Zero. Please check the URL and ensure it\'s running.')
-    } else {
-      setError(err.message)
+// Step 5: Get Agent Zero URL for AG-UI connection
+async function getAgentZeroUrl(jwtToken) {
+  const response = await fetch('http://localhost:5000/api/user/agent-zero-status', {
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
     }
-  } finally {
-    setLoading(false)
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to get Agent Zero status')
+  }
+  
+  const status = await response.json()
+  
+  if (!status.has_api_key) {
+    throw new Error('Agent Zero not connected. Please connect first.')
+  }
+  
+  // Use configured_url for AG-UI connections
+  return status.configured_url
+}
+
+// Step 6: Set up AG-UI client and connect
+function setupAGUIClient(agentZeroUrl) {
+  const client = new AGUIClient({
+    url: agentZeroUrl,  // Use configured_url from status endpoint
+    contextId: 'chat-' + Date.now(),  // Generate unique context ID
+    transport: 'auto'  // Auto-select best transport (WebSocket or SSE)
+  })
+  
+  // Set up event handlers
+  client.on('connected', (event) => {
+    console.log('AG-UI connected:', event.data.connection_id)
+  })
+  
+  client.on('stream_chunk', (event) => {
+    // Handle streaming response chunks
+    const { chunk, full, message_id } = event.data
+    console.log('Stream chunk:', chunk)
+    updateChatUI(message_id, full)  // Update UI with full text so far
+  })
+  
+  client.on('stream_end', (event) => {
+    // Handle stream completion
+    const { final_text, message_id } = event.data
+    console.log('Stream complete:', final_text)
+    finalizeMessage(message_id, final_text)
+  })
+  
+  client.on('error', (error) => {
+    console.error('AG-UI error:', error)
+    showError(error.message)
+  })
+  
+  return client
+}
+
+// Complete integration flow
+async function initializeApp() {
+  try {
+    // 1. Authenticate with Supabase
+    const jwtToken = await authenticateUser('user@example.com', 'password')
+    console.log('Authenticated with Supabase')
+    
+    // 2. Initialize profile
+    await initializeProfile(jwtToken)
+    console.log('Profile initialized')
+    
+    // 3. Connect to Agent Zero (if not already connected)
+    // You can check status first and skip if already connected
+    try {
+      await connectToAgentZero(jwtToken, 'agent_zero_username', 'agent_zero_password')
+      console.log('Connected to Agent Zero')
+    } catch (error) {
+      // If already connected, this might fail - check status instead
+      console.log('Connection attempt:', error.message)
+    }
+    
+    // 4. Get Agent Zero URL for AG-UI
+    const agentZeroUrl = await getAgentZeroUrl(jwtToken)
+    console.log('Agent Zero URL:', agentZeroUrl)
+    
+    // 5. Set up and connect AG-UI client
+    const aguiClient = setupAGUIClient(agentZeroUrl)
+    await aguiClient.connect()
+    console.log('AG-UI client connected')
+    
+    // 6. Send a message
+    await aguiClient.sendMessage('Hello, agent!')
+    
+    // Store client for later use
+    window.aguiClient = aguiClient
+    
+  } catch (error) {
+    console.error('Initialization error:', error)
+    showError(error.message)
   }
 }
+
+// Helper functions for UI updates (implement based on your UI framework)
+function updateChatUI(messageId, text) {
+  // Update chat UI with streaming text
+  const messageElement = document.getElementById(`message-${messageId}`)
+  if (messageElement) {
+    messageElement.textContent = text
+  }
+}
+
+function finalizeMessage(messageId, finalText) {
+  // Mark message as complete
+  const messageElement = document.getElementById(`message-${messageId}`)
+  if (messageElement) {
+    messageElement.classList.add('complete')
+  }
+}
+
+function showError(message) {
+  // Display error to user
+  alert('Error: ' + message)
+}
+
+// Initialize app on page load
+initializeApp()
 ```
+
+**Key Points from this Example:**
+
+1. **Two-Phase Architecture**: Portal Backend handles setup/management; AG-UI handles real-time communication
+2. **Always use `configured_url`**: From the status endpoint response, not `agent_zero_url`
+3. **No authentication needed for AG-UI**: AG-UI connections don't require API keys or tokens
+4. **Direct connection**: Frontend connects directly to AG-UI endpoints, bypassing Portal Backend for real-time communication
+5. **Error handling**: Each step has error handling to provide feedback to users
 
 ---
 
@@ -2049,9 +1873,10 @@ Use this checklist to verify your frontend implementation:
 
 ### Authentication
 
-- [ ] JWT token is included in all requests
+- [ ] **CRITICAL**: `Authorization: Bearer <token>` header is included in ALL requests
+- [ ] Token is extracted from `session.access_token` (not `session.token`)
 - [ ] Token refresh works when token expires
-- [ ] 401 errors are handled correctly
+- [ ] 401 errors trigger token refresh or redirect to login
 - [ ] User is redirected to login when authentication fails
 
 ### POST /api/user/initialize-profile
@@ -2071,10 +1896,12 @@ Use this checklist to verify your frontend implementation:
 ### POST /api/user/connect-agent-zero
 
 - [ ] Connection form validates inputs
+- [ ] **CRITICAL**: `Authorization: Bearer <token>` header is included
+- [ ] `agent_zero_url` is optional (recommended to omit - backend uses env-configured URL)
 - [ ] Success response is handled correctly
 - [ ] API key is not displayed in UI (or shown only once with warning)
 - [ ] 400 errors (validation) are shown to user
-- [ ] 401 errors (auth failed) are shown to user
+- [ ] 401 errors (Portal Backend auth OR Agent Zero auth failed) are handled correctly
 - [ ] 503 errors (connection failed) are shown to user
 - [ ] 404 errors (API key not found) are shown to user
 - [ ] 500 errors (server error) are shown to user
@@ -2167,13 +1994,21 @@ Use this checklist to verify your frontend implementation:
 
 This contract defines the Portal Backend API interface for frontend applications. Key points:
 
-1. **Authentication**: All requests require Supabase JWT tokens in the `Authorization` header
-2. **Endpoints**: Four endpoints for status, connection, API key retrieval, and settings updates
-3. **Error Handling**: Comprehensive error responses with clear messages
-4. **Security**: Credentials and API keys are handled securely by the backend
-5. **Implementation**: Use the provided examples as a starting point
+1. **Authentication**: **CRITICAL** - All requests require Supabase JWT tokens in `Authorization: Bearer <token>` header. Missing this causes 401 errors.
+2. **URL Handling**: `agent_zero_url` is optional. Backend uses its environment-configured URL (`AGENT_ZERO_URL`) for connections, ensuring correct behavior in Docker and production.
+3. **Endpoints**: Status, connection, API key retrieval, and settings updates
+4. **Error Handling**: Comprehensive error responses with clear messages
+5. **Security**: Credentials and API keys are handled securely by the backend
 
 **The backend is the source of truth for all API specifications. Frontend implementations must conform to this contract.**
+
+### Quick Troubleshooting
+
+**If login/password works in Agent Zero native UI but not in frontend UI:**
+1. ✅ Check `Authorization: Bearer ${session.access_token}` header is included
+2. ✅ Verify token is from `session.access_token`, not `session.token`
+3. ✅ Check token hasn't expired (refresh if needed)
+4. ✅ Try omitting `agent_zero_url` from requests
 
 ---
 

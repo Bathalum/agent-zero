@@ -112,7 +112,8 @@ def get_agent_zero_status():
         JSON response with status information:
         {
             "has_api_key": boolean,
-            "agent_zero_url": string,
+            "agent_zero_url": string (stored URL for display/reference only),
+            "configured_url": string (actual URL used for connections from AGENT_ZERO_URL env var),
             "api_key_retrieved_at": timestamp or null
         }
     """
@@ -122,6 +123,10 @@ def get_agent_zero_status():
         
         # Get user's Agent Zero status from Supabase
         status = db.get_user_agent_zero_status(user['id'])
+        
+        # Add configured URL for reference (this is what's actually used for connections)
+        status['configured_url'] = Config.AGENT_ZERO_URL
+        # Note: status['agent_zero_url'] is the stored URL (for display/reference only)
         
         return jsonify(status), 200
         
@@ -205,21 +210,13 @@ def get_initial_agent_zero_credentials_endpoint():
     try:
         user = g.user
         
-        # Get Agent Zero URL from request or use default
-        agent_zero_url = request.args.get('agent_zero_url') or Config.AGENT_ZERO_URL
-        
-        # Validate URL to prevent SSRF attacks
-        if not agent_zero_url.startswith(('http://', 'https://')):
-            return jsonify({
-                "username": None,
-                "password": None,
-                "available": False,
-                "message": "Invalid Agent Zero URL"
-            }), 400
+        # Always use configured URL for connections (ensures correct Docker service name)
+        agent_zero_url = Config.AGENT_ZERO_URL
         
         timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
         
         # Try to get initial credentials from Agent Zero
+        logger.debug(f"Attempting to get initial credentials from {agent_zero_url}")
         credentials = get_initial_agent_zero_credentials(agent_zero_url, timeout)
         
         if credentials and credentials.get('username'):
@@ -332,7 +329,10 @@ def update_agent_zero_credentials():
         
         # Get request data
         request_data = request.get_json() or {}
-        agent_zero_url = request_data.get('agent_zero_url') or Config.AGENT_ZERO_URL
+        # Frontend-provided URL is stored for display/reference only
+        frontend_url = request_data.get('agent_zero_url')
+        # Always use configured URL for actual connections (ensures correct Docker service name)
+        agent_zero_url = Config.AGENT_ZERO_URL
         username = request_data.get('username')
         password = request_data.get('password')
         
@@ -343,7 +343,8 @@ def update_agent_zero_credentials():
                 "message": "Username and password are required"
             }), 400
         
-        if not agent_zero_url.startswith(('http://', 'https://')):
+        # Validate frontend URL if provided (for storage)
+        if frontend_url and not frontend_url.startswith(('http://', 'https://')):
             return jsonify({
                 "success": False,
                 "message": "Invalid Agent Zero URL"
@@ -361,8 +362,9 @@ def update_agent_zero_credentials():
         timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
         
         # Step 1: Update Agent Zero's .env file via settings API (using old API key)
+        # Always use configured URL for connections (ensures correct Docker service name)
         try:
-            logger.info(f"Updating Agent Zero credentials for user {user['id']}")
+            logger.info(f"Updating Agent Zero credentials for user {user['id']} at {agent_zero_url}")
             set_settings(
                 agent_zero_url=agent_zero_url,
                 api_key=old_api_key,
@@ -374,31 +376,37 @@ def update_agent_zero_credentials():
             )
             logger.info(f"Agent Zero .env file updated for user {user['id']}")
         except AgentZeroConnectionError as e:
-            logger.error(f"Connection error updating Agent Zero settings for user {user['id']}: {e}")
+            logger.error(f"Connection error updating Agent Zero settings for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Unable to connect to Agent Zero at {agent_zero_url}. Please ensure it's running and the AGENT_ZERO_URL environment variable is correctly configured."
+            if Config.DEBUG:
+                error_msg += f" Error: {str(e)}"
             return jsonify({
                 "success": False,
-                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+                "message": error_msg
             }), 503
         except AgentZeroAuthenticationError as e:
-            logger.error(f"Authentication error updating Agent Zero settings for user {user['id']}: {e}")
+            logger.error(f"Authentication error updating Agent Zero settings for user {user['id']} at {agent_zero_url}: {e}")
             return jsonify({
                 "success": False,
                 "message": f"Authentication failed with stored API key: {str(e)}. Please reconnect to Agent Zero."
             }), 401
         except AgentZeroClientError as e:
-            logger.error(f"Client error updating Agent Zero settings for user {user['id']}: {e}")
+            logger.error(f"Client error updating Agent Zero settings for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Error updating Agent Zero settings: {str(e)}"
+            if Config.DEBUG:
+                error_msg += f" (URL: {agent_zero_url})"
             return jsonify({
                 "success": False,
-                "message": f"Error updating Agent Zero settings: {str(e)}"
+                "message": error_msg
             }), 500
         
-        # Step 2: Update Portal Backend stored credentials
+        # Step 2: Update Portal Backend stored credentials (use frontend URL if provided for display)
         try:
             db.store_agent_zero_credentials(
                 user_id=user['id'],
                 username=username,
                 password=password,
-                agent_zero_url=agent_zero_url,
+                agent_zero_url=frontend_url or agent_zero_url,  # Store frontend URL for display
                 email=user.get('email')
             )
             logger.info(f"Updated Portal Backend credentials for user {user['id']}")
@@ -409,7 +417,7 @@ def update_agent_zero_credentials():
                 "message": "Failed to update stored credentials"
             }), 500
         
-        # Step 3: Authenticate with new credentials
+        # Step 3: Authenticate with new credentials (always use configured URL)
         try:
             auth_result = authenticate_with_credentials(
                 agent_zero_url=agent_zero_url,
@@ -418,13 +426,16 @@ def update_agent_zero_credentials():
                 timeout=timeout
             )
         except AgentZeroConnectionError as e:
-            logger.error(f"Connection error authenticating with new credentials for user {user['id']}: {e}")
+            logger.error(f"Connection error authenticating with new credentials for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Unable to connect to Agent Zero at {agent_zero_url}. Please ensure it's running and the AGENT_ZERO_URL environment variable is correctly configured."
+            if Config.DEBUG:
+                error_msg += f" Error: {str(e)}"
             return jsonify({
                 "success": False,
-                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+                "message": error_msg
             }), 503
         except AgentZeroAuthenticationError as e:
-            logger.error(f"Authentication error with new credentials for user {user['id']}: {e}")
+            logger.error(f"Authentication error with new credentials for user {user['id']} at {agent_zero_url}: {e}")
             return jsonify({
                 "success": False,
                 "message": f"Authentication failed with new credentials: {str(e)}"
@@ -451,12 +462,12 @@ def update_agent_zero_credentials():
                 "message": f"Error retrieving new API key: {str(e)}"
             }), 500
         
-        # Step 5: Store new API key
+        # Step 5: Store new API key (use frontend URL if provided for display)
         try:
             db.update_user_agent_zero_config(
                 user_id=user['id'],
                 api_key=new_api_key,
-                agent_zero_url=agent_zero_url
+                agent_zero_url=frontend_url or agent_zero_url  # Store frontend URL for display
             )
             logger.info(f"Successfully updated credentials and API key for user {user['id']}")
             
@@ -523,7 +534,10 @@ def connect_agent_zero():
         
         # Get request data
         request_data = request.get_json() or {}
-        agent_zero_url = request_data.get('agent_zero_url') or Config.AGENT_ZERO_URL
+        # Frontend-provided URL is stored for display/reference only
+        frontend_url = request_data.get('agent_zero_url')
+        # Always use configured URL for actual connections (ensures correct Docker service name)
+        agent_zero_url = Config.AGENT_ZERO_URL
         username = request_data.get('username')
         password = request_data.get('password')
         
@@ -531,7 +545,8 @@ def connect_agent_zero():
         _debug_log("app/routes/agent_zero.py:connect_agent_zero", "Request data parsed", {
             "has_username": bool(username),
             "has_password": bool(password),
-            "agent_zero_url": agent_zero_url
+            "frontend_url": frontend_url,
+            "agent_zero_url_used": agent_zero_url
         }, "E")
         # #endregion
         
@@ -542,7 +557,8 @@ def connect_agent_zero():
                 "message": "Username and password are required"
             }), 400
         
-        if not agent_zero_url.startswith(('http://', 'https://')):
+        # Validate frontend URL if provided (for storage)
+        if frontend_url and not frontend_url.startswith(('http://', 'https://')):
             return jsonify({
                 "success": False,
                 "message": "Invalid Agent Zero URL"
@@ -550,7 +566,7 @@ def connect_agent_zero():
         
         timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
         
-        # Store credentials in database
+        # Store credentials in database (use frontend URL if provided, otherwise configured URL)
         try:
             # #region agent log
             _debug_log("app/routes/agent_zero.py:connect_agent_zero", "Calling store_agent_zero_credentials", {
@@ -564,7 +580,7 @@ def connect_agent_zero():
                 user_id=user['id'],
                 username=username,
                 password=password,
-                agent_zero_url=agent_zero_url,
+                agent_zero_url=frontend_url or agent_zero_url,  # Store frontend URL for display
                 email=user.get('email')
             )
             # #region agent log
@@ -598,7 +614,9 @@ def connect_agent_zero():
             }), 500
         
         # Authenticate with Agent Zero and retrieve API key
+        # Always use configured URL for connections (ensures correct Docker service name)
         try:
+            logger.info(f"Connecting to Agent Zero at {agent_zero_url} for user {user['id']}")
             auth_result = authenticate_with_credentials(
                 agent_zero_url=agent_zero_url,
                 username=username,
@@ -615,36 +633,45 @@ def connect_agent_zero():
             )
             
         except AgentZeroConnectionError as e:
-            logger.error(f"Connection error for user {user['id']}: {e}")
+            logger.error(f"Connection error for user {user['id']} to {agent_zero_url}: {e}")
+            error_msg = f"Unable to connect to Agent Zero at {agent_zero_url}. Please ensure it's running and the AGENT_ZERO_URL environment variable is correctly configured."
+            if Config.DEBUG:
+                error_msg += f" Error: {str(e)}"
             return jsonify({
                 "success": False,
-                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+                "message": error_msg
             }), 503
         except AgentZeroAuthenticationError as e:
-            logger.error(f"Authentication error for user {user['id']}: {e}")
+            logger.error(f"Authentication error for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Authentication failed: {str(e)}"
+            if Config.DEBUG:
+                error_msg += f" (URL: {agent_zero_url})"
             return jsonify({
                 "success": False,
-                "message": f"Authentication failed: {str(e)}"
+                "message": error_msg
             }), 401
         except AgentZeroAPIKeyNotFoundError as e:
-            logger.error(f"API key not found for user {user['id']}: {e}")
+            logger.error(f"API key not found for user {user['id']} at {agent_zero_url}: {e}")
             return jsonify({
                 "success": False,
                 "message": "API key not found in Agent Zero settings."
             }), 404
         except AgentZeroClientError as e:
-            logger.error(f"Client error for user {user['id']}: {e}")
+            logger.error(f"Client error for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Error retrieving API key: {str(e)}"
+            if Config.DEBUG:
+                error_msg += f" (URL: {agent_zero_url})"
             return jsonify({
                 "success": False,
-                "message": f"Error retrieving API key: {str(e)}"
+                "message": error_msg
             }), 500
         
-        # Store API key in database
+        # Store API key in database (use frontend URL if provided for display, otherwise configured URL)
         try:
             db.update_user_agent_zero_config(
                 user_id=user['id'],
                 api_key=api_key,
-                agent_zero_url=agent_zero_url
+                agent_zero_url=frontend_url or agent_zero_url  # Store frontend URL for display
             )
             
             logger.info(f"Successfully connected Agent Zero for user {user['id']}")
@@ -715,12 +742,14 @@ def update_agent_zero_settings():
             }), 404
         
         api_key = user_record['agent_zero_api_key']
-        agent_zero_url = user_record.get('agent_zero_url') or Config.AGENT_ZERO_URL
+        # Always use configured URL for connections (ensures correct Docker service name)
+        agent_zero_url = Config.AGENT_ZERO_URL
         
         timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
         
         # Update settings in Agent Zero
         try:
+            logger.info(f"Updating Agent Zero settings for user {user['id']} at {agent_zero_url}")
             set_settings(
                 agent_zero_url=agent_zero_url,
                 api_key=api_key,
@@ -736,22 +765,28 @@ def update_agent_zero_settings():
             }), 200
             
         except AgentZeroConnectionError as e:
-            logger.error(f"Connection error for user {user['id']}: {e}")
+            logger.error(f"Connection error for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Unable to connect to Agent Zero at {agent_zero_url}. Please ensure it's running and the AGENT_ZERO_URL environment variable is correctly configured."
+            if Config.DEBUG:
+                error_msg += f" Error: {str(e)}"
             return jsonify({
                 "success": False,
-                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+                "message": error_msg
             }), 503
         except AgentZeroAuthenticationError as e:
-            logger.error(f"Authentication error for user {user['id']}: {e}")
+            logger.error(f"Authentication error for user {user['id']} at {agent_zero_url}: {e}")
             return jsonify({
                 "success": False,
                 "message": f"Authentication failed: {str(e)}. Please reconnect to Agent Zero."
             }), 401
         except AgentZeroClientError as e:
-            logger.error(f"Client error for user {user['id']}: {e}")
+            logger.error(f"Client error for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Error updating settings: {str(e)}"
+            if Config.DEBUG:
+                error_msg += f" (URL: {agent_zero_url})"
             return jsonify({
                 "success": False,
-                "message": f"Error updating settings: {str(e)}"
+                "message": error_msg
             }), 500
         
     except Exception as e:
@@ -785,16 +820,11 @@ def retrieve_agent_zero_api_key():
         user = g.user
         db = SupabaseDB.get_instance()
         
-        # Get Agent Zero URL from request or use default
+        # Get request data
         request_data = request.get_json() or {}
-        agent_zero_url = request_data.get('agent_zero_url') or Config.AGENT_ZERO_URL
-        
-        # Validate URL to prevent SSRF attacks
-        if not agent_zero_url.startswith(('http://', 'https://')):
-            return jsonify({
-                "success": False,
-                "message": "Invalid Agent Zero URL"
-            }), 400
+        # Frontend-provided URL is ignored - always use configured URL for connections
+        # Always use configured URL for actual connections (ensures correct Docker service name)
+        agent_zero_url = Config.AGENT_ZERO_URL
         
         # Check if user already has API key stored
         user_record = db.get_user_by_id(user['id'])
@@ -810,8 +840,8 @@ def retrieve_agent_zero_api_key():
         # Check if user has stored credentials
         credentials = db.get_agent_zero_credentials(user['id'])
         
-        # Retrieve API key from Agent Zero
-        logger.info(f"Retrieving API key from Agent Zero for user {user['id']}")
+        # Retrieve API key from Agent Zero (always use configured URL)
+        logger.info(f"Retrieving API key from Agent Zero at {agent_zero_url} for user {user['id']}")
         timeout = Config.AGENT_ZERO_REQUEST_TIMEOUT
         
         try:
@@ -834,13 +864,16 @@ def retrieve_agent_zero_api_key():
                 # Try without authentication (for Agent Zero instances without auth)
                 api_key = get_api_key_from_agent_zero(agent_zero_url, timeout=timeout)
         except AgentZeroConnectionError as e:
-            logger.error(f"Connection error for user {user['id']}: {e}")
+            logger.error(f"Connection error for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Unable to connect to Agent Zero at {agent_zero_url}. Please ensure it's running and the AGENT_ZERO_URL environment variable is correctly configured."
+            if Config.DEBUG:
+                error_msg += f" Error: {str(e)}"
             return jsonify({
                 "success": False,
-                "message": "Unable to connect to Agent Zero. Please ensure it's running."
+                "message": error_msg
             }), 503
         except AgentZeroAuthenticationError as e:
-            logger.error(f"Authentication error for user {user['id']}: {e}")
+            logger.error(f"Authentication error for user {user['id']} at {agent_zero_url}: {e}")
             # If authentication failed and no credentials stored, suggest connecting
             if not credentials:
                 return jsonify({
@@ -852,24 +885,27 @@ def retrieve_agent_zero_api_key():
                 "message": str(e)
             }), 401
         except AgentZeroAPIKeyNotFoundError as e:
-            logger.error(f"API key not found for user {user['id']}: {e}")
+            logger.error(f"API key not found for user {user['id']} at {agent_zero_url}: {e}")
             return jsonify({
                 "success": False,
                 "message": "API key not found in Agent Zero settings."
             }), 404
         except AgentZeroClientError as e:
-            logger.error(f"Client error for user {user['id']}: {e}")
+            logger.error(f"Client error for user {user['id']} at {agent_zero_url}: {e}")
+            error_msg = f"Error retrieving API key: {str(e)}"
+            if Config.DEBUG:
+                error_msg += f" (URL: {agent_zero_url})"
             return jsonify({
                 "success": False,
-                "message": f"Error retrieving API key: {str(e)}"
+                "message": error_msg
             }), 500
         
-        # Store API key in Supabase
+        # Store API key in Supabase (use configured URL for storage)
         try:
             db.update_user_agent_zero_config(
                 user_id=user['id'],
                 api_key=api_key,
-                agent_zero_url=agent_zero_url
+                agent_zero_url=agent_zero_url  # Store configured URL
             )
             
             logger.info(f"API key retrieved and stored successfully for user {user['id']}")

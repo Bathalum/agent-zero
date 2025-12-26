@@ -346,16 +346,16 @@ def extract_api_key(settings_data: dict) -> str:
         settings = settings_data.get('settings', {})
         sections = settings.get('sections', [])
         
-        # Find the MCP section
+        # Find the MCP Server section (section ID is 'mcp_server', not 'mcp')
         mcp_section = None
         for section in sections:
-            if section.get('id') == 'mcp':
+            if section.get('id') == 'mcp_server':
                 mcp_section = section
                 break
         
         if not mcp_section:
-            logger.error("MCP section not found in settings")
-            raise AgentZeroAPIKeyNotFoundError("MCP section not found in Agent Zero settings")
+            logger.error("MCP Server section not found in settings")
+            raise AgentZeroAPIKeyNotFoundError("MCP Server section not found in Agent Zero settings")
         
         # Find the mcp_server_token field
         fields = mcp_section.get('fields', [])
